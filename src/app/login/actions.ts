@@ -10,6 +10,12 @@ function readCreds(formData: FormData) {
   return { email, password };
 }
 
+// Only allow safe same-site relative redirects (guards against open redirects).
+function safeNext(formData: FormData): string {
+  const next = String(formData.get("next") ?? "");
+  return next.startsWith("/") && !next.startsWith("//") ? next : "/";
+}
+
 export async function login(formData: FormData) {
   const supabase = await createClient();
   const { email, password } = readCreds(formData);
@@ -20,7 +26,7 @@ export async function login(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect(safeNext(formData));
 }
 
 export async function signup(formData: FormData) {
@@ -38,7 +44,7 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect(safeNext(formData));
 }
 
 export async function signOut() {

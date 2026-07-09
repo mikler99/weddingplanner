@@ -10,9 +10,9 @@ import { PlanSwitcher } from "./PlanSwitcher";
 const PILLARS = [
   { href: "/budget", title: "Budget", desc: "Live totals from guests + vendors", live: true },
   { href: "/documents", title: "Documents", desc: "Upload quotes, extract with AI", live: true },
-  { href: "/vendors", title: "Vendors", desc: "Compare quotes side by side", live: false },
-  { href: "/calendar", title: "Calendar", desc: "Payments, tastings, milestones", live: false },
-  { href: "/savings", title: "Savings & cash-flow", desc: "Income vs expenses → what to save", live: false },
+  { href: "/vendors", title: "Vendors", desc: "Suppliers, status & contracts", live: true },
+  { href: "/calendar", title: "Calendar", desc: "Payment plan & to-dos on a timeline", live: true },
+  { href: "/savings", title: "Budget & savings", desc: "Personal budget → savings & cash-flow", live: true },
   { href: "/guests", title: "Guests & RSVP", desc: "Guest list, headcount, responses", live: true },
 ];
 
@@ -39,7 +39,7 @@ export default async function Home() {
       </header>
 
       {/* Money at a glance */}
-      <section className="grid gap-4 sm:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <Stat label="Estimated cost" value={money0(b.expense)} />
         <TargetStat weddingId={w.id} target={w.budget_target} over={overTarget} />
         <Stat label="Available" value={money0(b.available)} sub={`${money0(d.paidTotal)} paid`} />
@@ -56,20 +56,20 @@ export default async function Home() {
             {d.monthly > 0 && ` · currently saving ${money0(d.monthly)}/mo`}
           </p>
         </div>
-        <Link href="/budget" className="mt-1 inline-block text-xs text-accent hover:underline">
-          Adjust the plan in Budget → <span className="text-faint">(income-based planning coming soon)</span>
+        <Link href="/savings" className="mt-1 inline-block text-xs text-accent hover:underline">
+          Plan savings & cash-flow →
         </Link>
       </section>
 
       <div className="mt-8 grid gap-8 md:grid-cols-2">
-        <Panel title="Next payments" count={d.payments.length}>
+        <Panel title="Next payments" href="/calendar" count={d.payments.length}>
           <Checklist
             kind="payment"
             empty="Nothing outstanding."
             items={d.payments.map((p) => ({ id: p.id, label: p.label, meta: p.dueLabel, amount: p.amount, done: false }))}
           />
         </Panel>
-        <Panel title="Next tasks" count={d.openTaskCount}>
+        <Panel title="Next tasks" href="/calendar" count={d.openTaskCount}>
           <Checklist
             kind="task"
             empty="All caught up."

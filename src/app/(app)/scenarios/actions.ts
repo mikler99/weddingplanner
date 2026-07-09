@@ -24,6 +24,11 @@ export async function createScenario(weddingId: string, name: string, cloneFrom?
   if (cloneFrom) {
     const links = (await supabase.from("scenario_items").select("item_id").eq("scenario_id", cloneFrom)).data ?? [];
     if (links.length) await supabase.from("scenario_items").insert(links.map((l) => ({ scenario_id: data.id, item_id: l.item_id })));
+    // Copy the plan's payments + to-dos so the clone is a complete plan.
+    const pays = (await supabase.from("payments").select("label, amount, due_date, due_rule, paid, vendor_id, source_document_id, source_item_key, sort").eq("scenario_id", cloneFrom)).data ?? [];
+    if (pays.length) await supabase.from("payments").insert(pays.map((p) => ({ ...p, wedding_id: weddingId, scenario_id: data.id })));
+    const tasks = (await supabase.from("milestones").select("when_label, due_date, due_rule, task, owner, done, vendor_id, sort").eq("scenario_id", cloneFrom)).data ?? [];
+    if (tasks.length) await supabase.from("milestones").insert(tasks.map((t) => ({ ...t, wedding_id: weddingId, scenario_id: data.id })));
   }
   revalidatePath("/scenarios");
   return { ok: true, id: data.id };

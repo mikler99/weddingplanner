@@ -4,6 +4,8 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { extractProposal, ProposalSchema, type Proposal } from "@/lib/extract";
+import { ensureVendor } from "@/app/(app)/vendors/actions";
+import { slug } from "@/lib/slug";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -21,9 +23,6 @@ export async function deleteDocument(documentId: string): Promise<Result> {
   revalidatePath("/documents");
   return { ok: true };
 }
-
-const slug = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 60) || "item";
 
 // Upload → extract. Creates the documents row, runs Claude on the stored file
 // server-side (key never leaves the server), and saves the proposal as a DRAFT
@@ -115,32 +114,47 @@ export async function applyExtraction(payload: z.infer<typeof ApplyPayload>): Pr
   // Everything maps into the generic budget_items model. Caterer options come in
   // INACTIVE — the couple activates the one they choose on the budget page.
   const vendor = proposal.vendor_name ?? null;
+  const docVendorId = vendor ? await ensureVendor(weddingId, vendor) : null;
+
+  // Caterer quotes are often distinct suppliers → resolve each to its own vendor.
+  const catererRows = pick(proposal.caterers, include.caterers);
+  const catererVendorIds: (string | null)[] = [];
+  for (const r of catererRows) {
+    const nm = r.name || vendor;
+    catererVendorIds.push(nm ? await ensureVendor(weddingId, nm, "Catering") : null);
+  }
+
   const items = [
     ...pick(proposal.venue_costs, include.venue_costs).map((r) => ({
-      wedding_id: weddingId, category: "Venue", label: r.label, cost_type: "flat", amount: r.amount, taxable: true, vendor, ...prov(r.label),
+      wedding_id: weddingId, category: "Venue", label: r.label, cost_type: "flat", amount: r.amount, taxable: true, vendor, vendor_id: docVendorId, ...prov(r.label),
     })),
-    ...pick(proposal.caterers, include.caterers).map((r) => ({
+    ...catererRows.map((r, i) => ({
       wedding_id: weddingId, category: "Catering", label: r.package || r.name, cost_type: "per_guest",
-      amount: r.price_pp, taxable: true, group_key: "caterer", active: false, vendor: r.name || vendor, ...prov(r.package || r.name),
+      amount: r.price_pp, taxable: true, group_key: "caterer", active: false, vendor: r.name || vendor, vendor_id: catererVendorIds[i], ...prov(r.package || r.name),
     })),
     ...pick(proposal.budget_lines, include.budget_lines).map((r) => ({
-      wedding_id: weddingId, category: "Other", label: r.label, cost_type: "flat", amount: r.amount, taxable: false, vendor, ...prov(r.label),
+      wedding_id: weddingId, category: "Other", label: r.label, cost_type: "flat", amount: r.amount, taxable: false, vendor, vendor_id: docVendorId, ...prov(r.label),
     })),
   ];
+  // Payments are scenario-owned → the contract's schedule flows into the active plan.
+  const activeScenario = (await supabase.from("scenarios").select("id").eq("wedding_id", weddingId).eq("is_active", true).maybeSingle()).data?.id ?? null;
   const payments = pick(proposal.payments, include.payments).map((r) => ({
     wedding_id: weddingId,
+    scenario_id: activeScenario,
     label: r.label,
     amount: r.amount,
     due_date: r.due.kind === "absolute" ? r.due.date : null,
     due_rule: r.due.kind === "unknown" ? null : r.due,
+    vendor_id: docVendorId,
     ...prov(r.label),
   }));
 
   // Clear prior apply from this document, then insert fresh (idempotent re-Apply).
-  for (const t of ["budget_items", "payments"] as const) {
-    const del = await supabase.from(t).delete().eq("source_document_id", documentId);
-    if (del.error) return { ok: false, error: del.error.message };
-  }
+  // budget_items are a wedding-level pool; payments only re-apply within the active plan.
+  const delItems = await supabase.from("budget_items").delete().eq("source_document_id", documentId);
+  if (delItems.error) return { ok: false, error: delItems.error.message };
+  const delPays = await supabase.from("payments").delete().eq("source_document_id", documentId).eq("scenario_id", activeScenario ?? "");
+  if (delPays.error) return { ok: false, error: delPays.error.message };
   const inserts = [
     items.length && supabase.from("budget_items").insert(items),
     payments.length && supabase.from("payments").insert(payments),
@@ -151,6 +165,6 @@ export async function applyExtraction(payload: z.infer<typeof ApplyPayload>): Pr
   }
 
   await supabase.from("document_extractions").update({ status: "applied" }).eq("id", extractionId);
-  await supabase.from("documents").update({ extracted: true }).eq("id", documentId);
+  await supabase.from("documents").update({ extracted: true, vendor_id: docVendorId }).eq("id", documentId);
   return { ok: true };
 }

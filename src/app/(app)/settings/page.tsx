@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireMembership } from "@/lib/wedding";
@@ -59,10 +60,18 @@ export default async function SettingsPage() {
         </Field>
 
         <div className="flex items-center justify-between border-t border-line pt-4">
-          <span className="text-xs text-muted">{members.data?.length ?? 1} member{(members.data?.length ?? 1) === 1 ? "" : "s"} · you're {role} · inviting others is coming soon</span>
+          <span className="text-xs text-muted">{members.data?.length ?? 1} member{(members.data?.length ?? 1) === 1 ? "" : "s"} · you're {role}</span>
           <button className="rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-white hover:opacity-90">Save details</button>
         </div>
       </form>
+
+      <Link href="/settings/people" className="mt-4 flex items-center justify-between rounded-2xl border border-line bg-surface p-4 transition hover:border-accent">
+        <span>
+          <span className="block text-sm font-medium">People &amp; access →</span>
+          <span className="block text-xs text-muted">Invite family &amp; friends, manage roles (editors &amp; viewers)</span>
+        </span>
+        <span className="text-lg">👥</span>
+      </Link>
 
       <style>{`.input{width:100%;border-radius:0.5rem;border:1px solid var(--line);background:var(--surface);padding:0.5rem 0.75rem;font-size:0.875rem;color:var(--ink)}`}</style>
     </main>

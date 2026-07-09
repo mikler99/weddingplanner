@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { ensureVendor } from "@/app/(app)/vendors/actions";
 
 // Form-action variant used on the overview (sets the overall target).
 export async function setTarget(weddingId: string, formData: FormData) {
@@ -109,11 +110,18 @@ export async function deleteItem(id: string): Promise<Result> {
   return error ? fail(error.message) : ok;
 }
 
-// Set the supplier for a category by stamping it on its (selected) items.
+// Set the supplier for a category by stamping it on its (selected) items, and
+// link/create the matching vendor entity so Vendors + scenario-scoped payments
+// stay coherent.
 export async function setCategoryVendor(itemIds: string[], vendor: string | null): Promise<Result> {
   if (itemIds.length === 0) return ok;
   const supabase = await createClient();
-  const { error } = await supabase.from("budget_items").update({ vendor: vendor || null }).in("id", itemIds.slice(0, 200));
+  let vendor_id: string | null = null;
+  if (vendor) {
+    const { data } = await supabase.from("budget_items").select("wedding_id, category").eq("id", itemIds[0]).maybeSingle();
+    if (data) vendor_id = await ensureVendor(data.wedding_id, vendor, data.category);
+  }
+  const { error } = await supabase.from("budget_items").update({ vendor: vendor || null, vendor_id }).in("id", itemIds.slice(0, 200));
   return error ? fail(error.message) : ok;
 }
 
@@ -154,11 +162,12 @@ export async function createPackage(weddingId: string, payload: z.infer<typeof p
   });
 
   for (const cat of new Set(rows.map((r) => r.category))) await ensureCategory(supabase, weddingId, cat);
+  const vendor_id = d.vendor ? await ensureVendor(weddingId, d.vendor) : null;
 
   const { data: max } = await supabase.from("budget_items").select("sort").eq("wedding_id", weddingId).order("sort", { ascending: false }).limit(1).maybeSingle();
   const base = (max?.sort ?? -1) + 1;
   const items = rows.map((r, i) => ({
-    wedding_id: weddingId, category: r.category, label: r.label, cost_type: d.costType, amount: r.amount, taxable: true, bundle: d.name, vendor: d.vendor || null, sort: base + i,
+    wedding_id: weddingId, category: r.category, label: r.label, cost_type: d.costType, amount: r.amount, taxable: true, bundle: d.name, vendor: d.vendor || null, vendor_id, sort: base + i,
   }));
   const { data: created, error } = await supabase.from("budget_items").insert(items).select("id");
   if (error) return fail(error.message);
@@ -169,7 +178,7 @@ export async function createPackage(weddingId: string, payload: z.infer<typeof p
   return ok;
 }
 
-const giftPatch = z.object({ label: z.string().max(200), amount: money }).partial();
+const giftPatch = z.object({ label: z.string().max(200), amount: money, on_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() }).partial();
 export async function updateGift(id: string, patch: z.infer<typeof giftPatch>): Promise<Result> {
   const p = giftPatch.safeParse(patch);
   if (!p.success || Object.keys(p.data).length === 0) return fail("Invalid gift");

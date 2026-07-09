@@ -31,6 +31,7 @@ export interface BudgetItem {
   source_document_id?: string | null; // provenance (which uploaded quote it came from)
   bundle?: string | null; // package name (all-inclusive package spanning categories)
   vendor?: string | null; // supplier name (for obvious comparison)
+  vendor_id?: string | null; // linked vendor entity (see src/lib/vendors.ts)
 }
 
 export interface BudgetInput {

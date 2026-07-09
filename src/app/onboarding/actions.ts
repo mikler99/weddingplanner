@@ -53,7 +53,13 @@ export async function createWedding(formData: FormData): Promise<void> {
   await admin.from("wedding_members").insert({ wedding_id: wed.id, user_id: user.id, role: "owner" });
   await admin.from("budget_config").insert({ wedding_id: wed.id, tax_rate: taxForRegion(info.region) });
   await admin.from("budget_categories").insert(DEFAULT_CATEGORIES.map((c) => ({ wedding_id: wed.id, ...c })));
-  await admin.from("milestones").insert(STARTER_TASKS.map((t) => ({ wedding_id: wed.id, ...t })));
+  // Every wedding starts with one active plan; payments/to-dos are owned by it.
+  const { data: scen } = await admin
+    .from("scenarios")
+    .insert({ wedding_id: wed.id, name: "Working plan", guests: info.guest_estimate, is_active: true, sort: 0 })
+    .select("id")
+    .single();
+  await admin.from("milestones").insert(STARTER_TASKS.map((t) => ({ wedding_id: wed.id, scenario_id: scen?.id ?? null, ...t })));
 
   redirect("/");
 }

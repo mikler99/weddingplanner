@@ -9,11 +9,12 @@ const MESSAGES: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ e?: string; m?: string }>;
+  searchParams: Promise<{ e?: string; m?: string; next?: string }>;
 }) {
-  const { e, m } = await searchParams;
+  const { e, m, next } = await searchParams;
   const notice = m === "check-email" ? "Check your email to confirm your account." : null;
   const error = e ? MESSAGES[e] ?? e : null;
+  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-6 px-6">
@@ -33,7 +34,9 @@ export default async function LoginPage({
         </p>
       )}
 
+      {safeNext && <p className="rounded-md bg-accent-weak px-3 py-2 text-sm text-accent">Sign in to accept your invitation.</p>}
       <form className="flex flex-col gap-3">
+        {safeNext && <input type="hidden" name="next" value={safeNext} />}
         <label className="text-sm font-medium" htmlFor="email">
           Email
         </label>

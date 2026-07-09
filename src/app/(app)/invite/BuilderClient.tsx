@@ -62,9 +62,9 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
   const selected = config.sections.find((s) => s.id === sel);
 
   return (
-    <div className="flex" style={{ height: "calc(100dvh - 56px)" }}>
+    <div className="flex flex-col lg:h-[calc(100dvh-56px)] lg:flex-row">
       {/* LEFT — sections */}
-      <aside className="flex w-60 flex-none flex-col overflow-y-auto border-r border-line bg-surface">
+      <aside className="flex max-h-64 w-full flex-none flex-col overflow-y-auto border-b border-line bg-surface lg:max-h-none lg:w-60 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
           <span className="text-sm font-semibold">Invitation</span>
           <span className="text-[11px] text-faint">{status === "saving" ? "Saving…" : status === "saved" ? "Saved ✓" : ""}</span>
@@ -103,7 +103,7 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
       </aside>
 
       {/* CENTER — live preview */}
-      <div className="flex min-w-0 flex-1 flex-col bg-ground">
+      <div className="flex min-h-[60vh] min-w-0 flex-1 flex-col bg-ground lg:min-h-0">
         <div className="flex items-center justify-between border-b border-line px-4 py-2">
           <div className="flex gap-1">
             <button onClick={() => setDevice("desktop")} className={`rounded-md px-2.5 py-1 text-xs font-medium ${device === "desktop" ? "bg-surface text-ink shadow-sm" : "text-muted"}`}>Desktop</button>
@@ -120,7 +120,7 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
       </div>
 
       {/* RIGHT — inspector */}
-      <aside className="w-80 flex-none overflow-y-auto border-l border-line bg-surface p-4">
+      <aside className="w-full flex-none overflow-y-auto border-t border-line bg-surface p-4 lg:w-80 lg:border-l lg:border-t-0">
         {sel === "theme" ? (
           <ThemePanel config={config} setTheme={setTheme} />
         ) : selected ? (

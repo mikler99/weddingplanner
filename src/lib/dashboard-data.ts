@@ -58,22 +58,23 @@ export async function loadDashboard(weddingId: string): Promise<Dashboard | null
 
   const [target, payments, milestones, vendors, documents, guests] = await Promise.all([
     supabase.from("weddings").select("budget_target").eq("id", weddingId).single(),
-    supabase.from("payments").select("id, label, due_date, due_rule, amount, paid").eq("wedding_id", weddingId),
-    supabase.from("milestones").select("id, when_label, due_date, task, owner, done").eq("wedding_id", weddingId),
+    supabase.from("payments").select("id, label, due_date, due_rule, amount, paid").eq("scenario_id", data.activeScenarioId ?? ""),
+    supabase.from("milestones").select("id, when_label, due_date, due_rule, task, owner, done").eq("scenario_id", data.activeScenarioId ?? ""),
     supabase.from("vendors").select("id", { count: "exact", head: true }).eq("wedding_id", weddingId),
     supabase.from("documents").select("id", { count: "exact", head: true }).eq("wedding_id", weddingId),
     supabase.from("guests").select("rsvp").eq("wedding_id", weddingId),
   ]);
 
-  const byDate = <T extends { due_date: string | null }>(a: T, b: T) =>
-    (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999");
-
-  // Resolve each payment's due date from its rule + the wedding date.
+  // Payments + tasks are owned by the active plan (scenario_id filter above), and
+  // both resolve their date from a rule ("6 months before") + the wedding date.
   const allPayments: (Payment & { sort: string })[] = (payments.data ?? []).map((p) => {
     const r = resolveDue((p.due_rule as DueRule | null) ?? null, p.due_date, data.wedding.event_date);
-    return { ...(p as Payment), dueLabel: r.label, sort: r.sort };
+    return { id: p.id, label: p.label, due_date: p.due_date, due_rule: p.due_rule as DueRule | null, amount: p.amount, paid: p.paid, dueLabel: r.label, sort: r.sort };
   });
-  const allTasks = (milestones.data ?? []) as Milestone[];
+  const allTasks: (Milestone & { sort: string })[] = (milestones.data ?? []).map((t) => {
+    const r = resolveDue((t.due_rule as DueRule | null) ?? null, t.due_date, data.wedding.event_date);
+    return { id: t.id, when_label: t.when_label || r.label, due_date: t.due_date, task: t.task, owner: t.owner, done: t.done, sort: r.sort };
+  });
   const guestRows = guests.data ?? [];
 
   return {
@@ -88,7 +89,7 @@ export async function loadDashboard(weddingId: string): Promise<Dashboard | null
     },
     payments: allPayments.filter((p) => !p.paid).sort((a, b) => a.sort.localeCompare(b.sort)).slice(0, 5),
     paidTotal: allPayments.filter((p) => p.paid).reduce((n, p) => n + p.amount, 0),
-    tasks: allTasks.filter((t) => !t.done).sort(byDate).slice(0, 6),
+    tasks: allTasks.filter((t) => !t.done).sort((a, b) => a.sort.localeCompare(b.sort)).slice(0, 6),
     openTaskCount: allTasks.filter((t) => !t.done).length,
   };
 }

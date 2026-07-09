@@ -155,7 +155,7 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
       {err && <p className="mb-4 rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{err}</p>}
 
       {/* Summary + budget nudge */}
-      <div className="mb-5 grid gap-3 sm:grid-cols-4">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tally label="Invited" value={sum.seats} sub={`${sum.invitedParties} of ${sum.parties} parties`} />
         <Tally label="Attending" value={sum.attending} sub="confirmed heads" tone="good" />
         <Tally label="Awaiting reply" value={sum.pending} sub={`${sum.declined} declined`} />

@@ -6,7 +6,7 @@ import { Shell } from "./Shell";
 // page in the shared app shell (top nav + theme toggle). Login/auth routes
 // live outside this group and get no shell.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id, role } = await requireMembership();
   const supabase = await createClient();
   const { data: wedding } = await supabase
     .from("weddings")
@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single();
 
   return (
-    <Shell weddingName={wedding?.name ?? "Our Wedding"} eventDate={wedding?.event_date ?? null}>
+    <Shell weddingName={wedding?.name ?? "Our Wedding"} eventDate={wedding?.event_date ?? null} role={role}>
       {children}
     </Shell>
   );

@@ -4,7 +4,7 @@ import type { BudgetItem } from "@/lib/budget";
 export type Gift = { id: string; label: string; amount: number; sort: number };
 
 const ITEM_COLS =
-  "id, category, label, cost_type, amount, taxable, service_pct, refundable, active, group_key, sort, source_document_id, bundle, vendor";
+  "id, category, label, cost_type, amount, taxable, service_pct, refundable, active, group_key, sort, source_document_id, bundle, vendor, vendor_id";
 
 export type BudgetData = {
   wedding: { id: string; name: string; event_date: string; venue_name: string | null; guest_estimate: number };
