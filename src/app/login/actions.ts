@@ -1,0 +1,49 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+
+function readCreds(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+  return { email, password };
+}
+
+export async function login(formData: FormData) {
+  const supabase = await createClient();
+  const { email, password } = readCreds(formData);
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    redirect(`/login?e=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
+export async function signup(formData: FormData) {
+  const supabase = await createClient();
+  const { email, password } = readCreds(formData);
+
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) {
+    redirect(`/login?e=${encodeURIComponent(error.message)}`);
+  }
+
+  // If email confirmation is enabled, there's no session yet — tell the user.
+  if (!data.session) {
+    redirect("/login?m=check-email");
+  }
+
+  revalidatePath("/", "layout");
+  redirect("/");
+}
+
+export async function signOut() {
+  const supabase = await createClient();
+  await supabase.auth.signOut();
+  revalidatePath("/", "layout");
+  redirect("/login");
+}

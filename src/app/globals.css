@@ -1,26 +1,55 @@
 @import "tailwindcss";
 
+/* ---- Design tokens ---------------------------------------------------------
+   One palette for the whole app. Fresh warm-neutral + a disciplined iris
+   accent; category colours stay data-driven (inline). data-theme always wins
+   over the OS preference. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ground:#F7F5F2; --surface:#FFFFFF; --surface-2:#FBFAF8;
+  --ink:#211E26; --muted:#726E78; --faint:#9A95A0; --line:#ECE8E2;
+  --accent:#5B5BD6; --accent-weak:#ECECFB;
+  --good:#2E9E6E; --warn:#C98A22; --bad:#DB4B4B;
+}
+@media (prefers-color-scheme:dark) {
+  :root {
+    --ground:#16141A; --surface:#201D27; --surface-2:#1B1922;
+    --ink:#F3F0F5; --muted:#A9A3B0; --faint:#7C7684; --line:#2E2A35;
+    --accent:#9A9AF0; --accent-weak:#26243B;
+    --good:#4CC08C; --warn:#E0AE4B; --bad:#E86A6A;
+  }
+}
+:root[data-theme="light"] {
+  --ground:#F7F5F2; --surface:#FFFFFF; --surface-2:#FBFAF8;
+  --ink:#211E26; --muted:#726E78; --faint:#9A95A0; --line:#ECE8E2;
+  --accent:#5B5BD6; --accent-weak:#ECECFB;
+  --good:#2E9E6E; --warn:#C98A22; --bad:#DB4B4B;
+}
+:root[data-theme="dark"] {
+  --ground:#16141A; --surface:#201D27; --surface-2:#1B1922;
+  --ink:#F3F0F5; --muted:#A9A3B0; --faint:#7C7684; --line:#2E2A35;
+  --accent:#9A9AF0; --accent-weak:#26243B;
+  --good:#4CC08C; --warn:#E0AE4B; --bad:#E86A6A;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ground:var(--ground);
+  --color-surface:var(--surface);
+  --color-surface-2:var(--surface-2);
+  --color-ink:var(--ink);
+  --color-muted:var(--muted);
+  --color-faint:var(--faint);
+  --color-line:var(--line);
+  --color-accent:var(--accent);
+  --color-accent-weak:var(--accent-weak);
+  --color-good:var(--good);
+  --color-warn:var(--warn);
+  --color-bad:var(--bad);
+  --font-sans:var(--font-geist-sans);
+  --font-display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:var(--font-geist-sans),system-ui,-apple-system,"Segoe UI",sans-serif;
 }

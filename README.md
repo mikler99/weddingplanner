@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wedding Hub
 
-## Getting Started
+A shared wedding-planning hub: budget scenarios, AI document extraction, a guest list with RSVP, and a visual invitation builder — all scoped per wedding with Supabase auth + RLS.
 
-First, run the development server:
+## Stack
+
+- **Next.js** (App Router) + TypeScript + Tailwind v4
+- **Supabase** — Postgres, Auth, Row-Level Security, Storage
+- **Anthropic** (Claude) — extracts costs/packages/payments from uploaded quotes
+- **Resend** — sends invitation emails (optional)
+- Deployed on **Vercel**
+
+## Local development
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in the values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Runs at http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See [.env.example](.env.example). Required: the two `NEXT_PUBLIC_SUPABASE_*` keys, `SUPABASE_SERVICE_ROLE_KEY`, and `ANTHROPIC_API_KEY`. `RESEND_API_KEY` + `INVITE_FROM_EMAIL` are optional (needed only for one-click invite emails).
 
-## Learn More
+### Database
 
-To learn more about Next.js, take a look at the following resources:
+Migrations live in [`supabase/migrations`](supabase/migrations). Apply them to a hosted project with:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx supabase db push --db-url "postgresql://postgres.<ref>:<password>@<host>:5432/postgres"
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploying to Vercel
 
-## Deploy on Vercel
+1. Import the GitHub repo in Vercel (framework auto-detected as Next.js).
+2. Add the environment variables from `.env.example` in **Project → Settings → Environment Variables**.
+3. Deploy, then add your Vercel domain to Supabase **Auth → URL Configuration** (Site URL + redirect URLs).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Public invite
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Each guest gets a private link at `/i/<token>`; the couple edits the invitation visually at `/invite`.
