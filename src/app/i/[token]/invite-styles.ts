@@ -132,4 +132,8 @@ export const INVITE_CSS = `
 
 }
 .invite{min-height:100vh}
+.invite .site-nav{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 22px;padding:13px 20px;background:rgba(14,10,6,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid rgba(201,168,106,.18)}
+.invite .site-nav a{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;color:var(--ink-soft);text-decoration:none;padding:4px 2px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s}
+.invite .site-nav a:hover{color:var(--ink)}
+.invite .site-nav a.current{color:var(--gold-2);border-color:var(--gold)}
 `;

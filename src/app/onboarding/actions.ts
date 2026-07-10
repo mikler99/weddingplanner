@@ -50,6 +50,11 @@ export async function createWedding(formData: FormData): Promise<void> {
     .single();
   if (error || !wed) redirect("/onboarding?e=failed");
 
+  // Best-effort public-site slug from the name (unique index; ignore collisions —
+  // they can set one in Settings). Non-blocking.
+  const slug = info.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 60);
+  if (slug) await admin.from("weddings").update({ slug }).eq("id", wed.id);
+
   await admin.from("wedding_members").insert({ wedding_id: wed.id, user_id: user.id, role: "owner" });
   await admin.from("budget_config").insert({ wedding_id: wed.id, tax_rate: taxForRegion(info.region) });
   await admin.from("budget_categories").insert(DEFAULT_CATEGORIES.map((c) => ({ wedding_id: wed.id, ...c })));

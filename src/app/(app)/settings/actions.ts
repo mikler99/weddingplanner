@@ -45,5 +45,10 @@ export async function updateWeddingInfo(weddingId: string, formData: FormData): 
   // Keep the active plan's headcount in sync (every other guest-count writer does).
   await supabase.from("scenarios").update({ guests: wedding.guest_estimate }).eq("wedding_id", weddingId).eq("is_active", true);
 
+  // Public website address — updated separately so a taken slug can't block the
+  // rest of the save (the unique index rejects duplicates, which we ignore).
+  const slug = str("slug").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 60);
+  if (slug) await supabase.from("weddings").update({ slug }).eq("id", weddingId);
+
   revalidatePath("/", "layout"); // date/guests/tax ripple across every page
 }

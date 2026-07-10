@@ -9,7 +9,7 @@ export default async function SettingsPage() {
   const supabase = await createClient();
 
   const [wedding, config, members] = await Promise.all([
-    supabase.from("weddings").select("id, name, event_date, venue_name, venue_address, guest_estimate, guest_guarantee, region, budget_target").eq("id", wedding_id).single(),
+    supabase.from("weddings").select("id, name, slug, event_date, venue_name, venue_address, guest_estimate, guest_guarantee, region, budget_target").eq("id", wedding_id).single(),
     supabase.from("budget_config").select("tax_rate").eq("wedding_id", wedding_id).single(),
     supabase.from("wedding_members").select("role").eq("wedding_id", wedding_id),
   ]);
@@ -27,6 +27,13 @@ export default async function SettingsPage() {
       <form action={updateWeddingInfo.bind(null, w.id)} className="flex flex-col gap-5 rounded-2xl border border-line bg-surface p-6">
         <Field label="Wedding name" hint="Shown across the app (e.g. “Olivia & Michael”).">
           <input name="name" defaultValue={w.name} required className="input" />
+        </Field>
+
+        <Field label="Website address" hint={`Your public wedding site lives at /w/${w.slug ?? "your-names"}${w.slug ? "" : " — set one to publish"}.`}>
+          <div className="flex items-center gap-1 rounded-lg border border-line bg-surface px-2">
+            <span className="text-sm text-faint">/w/</span>
+            <input name="slug" defaultValue={w.slug ?? ""} placeholder="your-names" pattern="[a-z0-9-]+" className="flex-1 bg-transparent py-2 text-sm outline-none" />
+          </div>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">

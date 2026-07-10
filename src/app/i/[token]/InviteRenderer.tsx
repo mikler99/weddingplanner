@@ -2,6 +2,7 @@
 
 import type { InviteConfig, Section } from "@/lib/invite-config";
 import { themeVars } from "@/lib/invite-config";
+import { pageBySlug, type SiteConfig } from "@/lib/site-config";
 import { RsvpForm, type InviteGuest } from "./RsvpForm";
 import { InviteMotion } from "./InviteMotion";
 
@@ -19,6 +20,40 @@ export function InviteRenderer({ config, mode, token, guest }: { config: InviteC
         <div className="bg-wood" />
         <div className="bg-veil" />
         {config.sections.filter((s) => s.visible).map((s) => (
+          <SectionView key={s.id} s={s} mode={mode} token={token} guest={guest} />
+        ))}
+      </div>
+      {mode === "live" && countdown && <InviteMotion targetIso={countdown.targetIso} />}
+    </>
+  );
+}
+
+// Renders ONE page of a multi-page site + a themed top nav (when >1 page).
+export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "" }: {
+  site: SiteConfig; pageSlug?: string; mode: Mode; token?: string; guest?: InviteGuest; base?: string;
+}) {
+  const page = pageBySlug(site, pageSlug);
+  const hero = page.sections.find((s) => s.type === "hero") as Extract<Section, { type: "hero" }> | undefined;
+  const countdown = page.sections.find((s) => s.type === "countdown") as Extract<Section, { type: "countdown" }> | undefined;
+  const style: React.CSSProperties = { ...themeVars(site.theme) };
+  if (hero) (style as Record<string, string>)["--img-hero"] = `url('${hero.bgImage}')`;
+
+  const navPages = site.pages.filter((p) => p.showInNav);
+  const hrefFor = (slug: string) => (slug === "home" ? base || "/" : `${base}/${slug}`);
+
+  return (
+    <>
+      <div className="invite" style={style}>
+        <div className="bg-wood" />
+        <div className="bg-veil" />
+        {navPages.length > 1 && (
+          <nav className="site-nav">
+            {navPages.map((p) => (
+              <a key={p.id} href={mode === "live" ? hrefFor(p.slug) : undefined} className={p.slug === page.slug ? "current" : ""}>{p.title}</a>
+            ))}
+          </nav>
+        )}
+        {page.sections.filter((s) => s.visible).map((s) => (
           <SectionView key={s.id} s={s} mode={mode} token={token} guest={guest} />
         ))}
       </div>
