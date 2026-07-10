@@ -15,7 +15,7 @@ const PREVIEW_CSS = `
 `;
 
 export default async function InviteBuilderPage() {
-  const { wedding_id } = await requireModule("guests");
+  const { wedding_id } = await requireModule("website");
   const supabase = await createClient();
   const { data } = await supabase.from("weddings").select("invite_config").eq("id", wedding_id).single();
   const site = normalizeSite(data?.invite_config);

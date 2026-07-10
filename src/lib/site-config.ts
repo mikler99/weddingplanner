@@ -5,7 +5,11 @@
 
 import { type Section, type Theme, DEFAULT_THEME, DEFAULT_INVITE, newSection } from "@/lib/invite-config";
 
-export type SitePage = { id: string; slug: string; title: string; showInNav: boolean; sections: Section[] };
+// `sections` is the legacy flat list; `blocks` is the element-tree (section →
+// column → widget) the new builder writes. When `blocks` is present it wins;
+// site-nodes.normalizePage() wraps `sections` into blocks for old pages. The
+// type stays structural (not importing site-nodes) to avoid an import cycle.
+export type SitePage = { id: string; slug: string; title: string; showInNav: boolean; sections: Section[]; blocks?: unknown[] };
 export type NamedTheme = { id: string; name: string; theme: Theme };
 export type SiteConfig = { theme: Theme; savedThemes?: NamedTheme[]; pages: SitePage[] };
 

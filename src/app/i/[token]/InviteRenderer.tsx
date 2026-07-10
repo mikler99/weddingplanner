@@ -3,6 +3,10 @@
 import type { InviteConfig, Section } from "@/lib/invite-config";
 import { themeVars } from "@/lib/invite-config";
 import { pageBySlug, type SiteConfig } from "@/lib/site-config";
+import {
+  type SectionNode, type ColumnNode, type WidgetNode, type NodeStyle, type Sides,
+  normalizePage, isPassthrough, widgetToSection, findWidget, WIDGET_META,
+} from "@/lib/site-nodes";
 import { RsvpForm, SiteRsvpLookup, type InviteGuest } from "./RsvpForm";
 import { InviteMotion } from "./InviteMotion";
 import { CameraBlock, GuestbookBlock, SongsBlock } from "@/app/w/WeddingApp";
@@ -34,10 +38,12 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", sl
   site: SiteConfig; pageSlug?: string; mode: Mode; token?: string; guest?: InviteGuest; base?: string; slug?: string;
 }) {
   const page = pageBySlug(site, pageSlug);
-  const hero = page.sections.find((s) => s.type === "hero") as Extract<Section, { type: "hero" }> | undefined;
-  const countdown = page.sections.find((s) => s.type === "countdown") as Extract<Section, { type: "countdown" }> | undefined;
+  const blocks = normalizePage(page);
+  const hero = findWidget(blocks, "hero");
+  const countdown = findWidget(blocks, "countdown");
   const style: React.CSSProperties = { ...themeVars(site.theme) };
-  if (hero) (style as Record<string, string>)["--img-hero"] = `url('${hero.bgImage}')`;
+  const heroImg = (hero?.data as { bgImage?: string } | undefined)?.bgImage;
+  if (heroImg) (style as Record<string, string>)["--img-hero"] = `url('${heroImg}')`;
 
   const navPages = site.pages.filter((p) => p.showInNav);
   const hrefFor = (slug: string) => (slug === "home" ? base || "/" : `${base}/${slug}`);
@@ -54,13 +60,160 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", sl
             ))}
           </nav>
         )}
-        {page.sections.filter((s) => s.visible).map((s) => (
-          <SectionView key={s.id} s={s} mode={mode} token={token} guest={guest} slug={slug} />
-        ))}
+        <BlocksRenderer blocks={blocks} mode={mode} token={token} guest={guest} slug={slug} />
       </div>
-      {mode === "live" && countdown && <InviteMotion targetIso={countdown.targetIso} />}
+      {mode === "live" && countdown && <InviteMotion targetIso={(countdown.data as { targetIso?: string }).targetIso ?? ""} />}
     </>
   );
+}
+
+/* ============================ Element engine =============================== */
+/* Renders the block tree. Wedding widgets delegate to SectionView (unchanged);
+   generic widgets render from their data + per-node style settings. */
+
+export function BlocksRenderer({ blocks, mode, token, guest, slug }: { blocks: SectionNode[]; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
+  return <>{blocks.filter((b) => b.visible !== false).map((sec) => <SectionNodeView key={sec.id} sec={sec} mode={mode} token={token} guest={guest} slug={slug} />)}</>;
+}
+
+function SectionNodeView({ sec, mode, token, guest, slug }: { sec: SectionNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
+  // A lone, unstyled wedding widget renders exactly as before (no wrapper).
+  const pass = isPassthrough(sec);
+  if (pass) return <WidgetView w={pass} mode={mode} token={token} guest={guest} slug={slug} />;
+
+  const st = sec.style;
+  const secStyle: React.CSSProperties = { ...secVars(st), position: st?.overlay ? "relative" : undefined };
+  if (st?.bgColor) secStyle.background = st.bgColor;
+  if (st?.bgImage) { secStyle.backgroundImage = `url('${st.bgImage}')`; secStyle.backgroundSize = "cover"; secStyle.backgroundPosition = "center"; }
+  return (
+    <section className={`node-sec ${sec.layout === "full" ? "full" : "boxed"} ${hideClass(st)} ${animClass(st, mode)}`} style={secStyle}>
+      {st?.overlay && <div className="node-overlay" style={{ background: st.overlay }} />}
+      <div className="node-row" style={{ maxWidth: st?.maxWidth ? `${st.maxWidth}px` : undefined }}>
+        {sec.columns.map((col) => <ColumnView key={col.id} col={col} mode={mode} token={token} guest={guest} slug={slug} />)}
+      </div>
+    </section>
+  );
+}
+
+function ColumnView({ col, mode, token, guest, slug }: { col: ColumnNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
+  const style: React.CSSProperties = { flexGrow: col.span, ...widgetCss(col.style) };
+  return (
+    <div className={`node-col ${hideClass(col.style)}`} style={style}>
+      {col.children.filter((w) => w.visible !== false).map((w) => <WidgetView key={w.id} w={w} mode={mode} token={token} guest={guest} slug={slug} />)}
+    </div>
+  );
+}
+
+function WidgetView({ w, mode, token, guest, slug }: { w: WidgetNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
+  if (!WIDGET_META[w.widget]?.generic) {
+    return <SectionView s={widgetToSection(w)} mode={mode} token={token} guest={guest} slug={slug} />;
+  }
+  const cls = `node-w node-${w.widget} ${hideClass(w.style)} ${animClass(w.style, mode)}`;
+  return <div className={cls.trim()} style={{ ...widgetCss(w.style), ...widgetVars(w.style) }}>{renderGeneric(w)}</div>;
+}
+
+function renderGeneric(w: WidgetNode): React.ReactNode {
+  const d = w.data as Record<string, unknown>;
+  const str = (k: string, fb = "") => (typeof d[k] === "string" ? (d[k] as string) : fb);
+  const num = (k: string, fb: number) => (typeof d[k] === "number" ? (d[k] as number) : fb);
+  switch (w.widget) {
+    case "heading": {
+      const lvl = Math.min(6, Math.max(1, num("level", 2)));
+      const Tag = (`h${lvl}` as unknown) as keyof React.JSX.IntrinsicElements;
+      return <Tag className="nh">{str("text", "Heading")}</Tag>;
+    }
+    case "text":
+      return <>{str("body").split(/\n{2,}/).map((p, i) => <p key={i} className="nt">{p.split("\n").map((line, j) => <span key={j}>{j > 0 && <br />}{line}</span>)}</p>)}</>;
+    case "image": {
+      const img = <img className="nimg" src={str("src")} alt={str("alt")} style={{ borderRadius: d.rounded ? 3 : undefined }} loading="lazy" />;
+      const href = str("href");
+      return href ? <a href={href} target="_blank" rel="noreferrer">{img}</a> : img;
+    }
+    case "button":
+      return <a className={`nbtn ${str("variant", "solid") === "outline" ? "outline" : "solid"}`} href={str("href", "#")}>{str("label", "Button")}</a>;
+    case "spacer":
+      return <div style={{ height: num("height", 40) }} aria-hidden />;
+    case "divider":
+      return d.variantOrnament === false ? <hr className="nhr" /> : <div className="nornament"><span className="l" /><span className="d" /><span className="l r" /></div>;
+    case "icon":
+      return <div className="nicon" style={{ fontSize: num("size", 40) }}>{str("glyph", "❦")}</div>;
+    case "video": {
+      const embed = videoEmbed(str("url"));
+      if (!embed) return <div className="nembed-empty">Add a video URL</div>;
+      return <div className="nvideo">{embed.type === "iframe" ? <iframe src={embed.src} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : <video src={embed.src} controls />}</div>;
+    }
+    case "map": {
+      const q = str("query");
+      if (!q) return <div className="nembed-empty">Add an address or place</div>;
+      return <div className="nmap" style={{ height: num("height", 320) }}><iframe src={`https://www.google.com/maps?q=${encodeURIComponent(q)}&output=embed`} loading="lazy" /></div>;
+    }
+    case "embed":
+      return str("html") ? <div className="nraw" dangerouslySetInnerHTML={{ __html: str("html") }} /> : <div className="nembed-empty">Paste embed / HTML</div>;
+    default:
+      return null;
+  }
+}
+
+function videoEmbed(url: string): { type: "iframe" | "video"; src: string } | null {
+  if (!url) return null;
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+  if (yt) return { type: "iframe", src: `https://www.youtube.com/embed/${yt[1]}` };
+  const vim = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (vim) return { type: "iframe", src: `https://player.vimeo.com/video/${vim[1]}` };
+  if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) return { type: "video", src: url };
+  return { type: "iframe", src: url };
+}
+
+/* ---- style → CSS helpers ---- */
+function sidesStr(s?: Sides): string | undefined {
+  if (!s) return undefined;
+  const n = (x?: number) => `${x ?? 0}px`;
+  return `${n(s.t)} ${n(s.r)} ${n(s.b)} ${n(s.l)}`;
+}
+function fontVar(f?: NodeStyle["fontFamily"]): string | undefined {
+  if (!f) return undefined;
+  return f === "display" ? "var(--font-display),serif" : f === "script" ? "var(--font-script),cursive" : "var(--font-sans),sans-serif";
+}
+// Device-varying properties are emitted as CSS custom properties so a media
+// query (in invite-styles) can swap the mobile value — inline styles alone
+// can't be overridden by a stylesheet. Section padding and widget font-size use
+// distinct var names so they don't collide as they cascade down the tree.
+function secVars(st?: NodeStyle): React.CSSProperties {
+  if (!st) return {};
+  const v: Record<string, string> = {};
+  const pad = sidesStr(st.padding); if (pad) v["--sec-pad"] = pad;
+  const padM = sidesStr(st.paddingMobile); if (padM) v["--sec-padm"] = padM;
+  return v as React.CSSProperties;
+}
+function widgetVars(st?: NodeStyle): React.CSSProperties {
+  if (!st) return {};
+  const v: Record<string, string> = {};
+  if (st.fontSize) v["--w-fs"] = `${st.fontSize}px`;
+  if (st.fontSizeMobile) v["--w-fsm"] = `${st.fontSizeMobile}px`;
+  return v as React.CSSProperties;
+}
+function widgetCss(st?: NodeStyle): React.CSSProperties {
+  if (!st) return {};
+  const css: React.CSSProperties = {};
+  if (st.align) css.textAlign = st.align;
+  if (st.padding) css.padding = sidesStr(st.padding);
+  if (st.margin) css.margin = sidesStr(st.margin);
+  if (st.color) css.color = st.color;
+  if (st.fontFamily) css.fontFamily = fontVar(st.fontFamily);
+  if (st.fontWeight) css.fontWeight = st.fontWeight;
+  if (st.lineHeight) css.lineHeight = st.lineHeight;
+  if (st.letterSpacing) css.letterSpacing = `${st.letterSpacing}px`;
+  if (st.bgColor) css.background = st.bgColor;
+  if (st.radius) css.borderRadius = `${st.radius}px`;
+  if (st.borderWidth) css.border = `${st.borderWidth}px solid ${st.borderColor || "currentColor"}`;
+  if (st.shadow) css.boxShadow = "0 18px 40px -22px rgba(0,0,0,.7)";
+  return css;
+}
+function hideClass(st?: NodeStyle): string {
+  return `${st?.hideMobile ? "node-hide-m" : ""} ${st?.hideDesktop ? "node-hide-d" : ""}`.trim();
+}
+function animClass(st?: NodeStyle, mode?: Mode): string {
+  if (mode !== "live" || !st?.animation || st.animation === "none") return "";
+  return st.animation === "rise" ? "rise" : `n-${st.animation}`;
 }
 
 // rise helper: reveal-on-scroll only in the live invite; always-visible in the builder
