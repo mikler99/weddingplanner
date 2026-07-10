@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { loadGuests } from "@/lib/guests";
 import { createClient } from "@/lib/supabase/server";
 import { SendClient } from "./SendClient";
 
 export default async function SendPage() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("guests");
   const [data, supabase] = await Promise.all([loadGuests(wedding_id), createClient()]);
   if (!data) return null;
   const { data: w } = await supabase.from("weddings").select("name").eq("id", wedding_id).single();

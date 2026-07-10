@@ -42,6 +42,8 @@ export async function updateWeddingInfo(weddingId: string, formData: FormData): 
   const supabase = await createClient();
   await supabase.from("weddings").update(wedding).eq("id", weddingId);
   await supabase.from("budget_config").update({ tax_rate }).eq("wedding_id", weddingId);
+  // Keep the active plan's headcount in sync (every other guest-count writer does).
+  await supabase.from("scenarios").update({ guests: wedding.guest_estimate }).eq("wedding_id", weddingId).eq("is_active", true);
 
   revalidatePath("/", "layout"); // date/guests/tax ripple across every page
 }

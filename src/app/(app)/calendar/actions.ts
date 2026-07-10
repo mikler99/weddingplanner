@@ -23,7 +23,8 @@ const dueRule = z
   })
   .nullable();
 
-function bump() { revalidatePath("/calendar"); revalidatePath("/"); }
+// Payments/tasks feed the hub and the cash-flow projection too.
+function bump() { revalidatePath("/calendar"); revalidatePath("/"); revalidatePath("/savings"); }
 
 /* ------------------------------- Payments ------------------------------- */
 

@@ -1,4 +1,4 @@
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { createClient } from "@/lib/supabase/server";
 import { loadPlanContext } from "@/lib/budget-data";
 import { loadSuggestions } from "@/lib/planner-suggestions";
@@ -6,7 +6,7 @@ import type { DueRule } from "@/lib/payments";
 import { CalendarClient, type CalPayment, type CalTask } from "./CalendarClient";
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("calendar");
   const { scenario } = await searchParams;
   const supabase = await createClient();
 

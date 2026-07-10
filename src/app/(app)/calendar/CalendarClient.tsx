@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { money0 } from "@/lib/format";
 import { resolveDue, type DueRule } from "@/lib/payments";
@@ -106,6 +107,7 @@ export function CalendarClient({ weddingId, scenarioId, scenarios, isActivePlan,
           </select>
         </label>
         {!isActivePlan && <span className="rounded-full bg-warn/10 px-2 py-0.5 text-[11px] font-semibold text-warn">viewing a non-active plan</span>}
+        <Link href={isActivePlan ? "/savings" : `/savings?scenario=${scenarioId}`} className="ml-auto text-sm text-accent hover:underline">See cash-flow →</Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">

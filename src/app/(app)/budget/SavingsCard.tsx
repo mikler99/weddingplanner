@@ -15,7 +15,7 @@ export function SavingsCard({
   weddingId: string; expense: number; months: number; saved: number; monthly: number; gifts: Gift[];
 }) {
   const [saved, setSaved] = useState(saved0);
-  const [monthly, setMonthly] = useState(monthly0);
+  const [monthly] = useState(monthly0); // = your budget capacity; edited in /savings
   const [gifts, setGifts] = useState<Gift[]>(gifts0);
   const [err, setErr] = useState<string | null>(null);
 
@@ -37,7 +37,6 @@ export function SavingsCard({
   }, [saved, monthly, gifts, expense, months]);
 
   const changeSaved = (n: number) => { setSaved(n); schedule("saved", () => actions.updateConfig(weddingId, { saved: n })); };
-  const changeMonthly = (n: number) => { setMonthly(n); schedule("monthly", () => actions.updateConfig(weddingId, { monthly: n })); };
   const changeGift = (id: string, patch: Partial<Gift>) => {
     setGifts((gs) => gs.map((g) => (g.id === id ? { ...g, ...patch } : g)));
     schedule(`gift:${id}`, () => actions.updateGift(id, patch));
@@ -63,7 +62,11 @@ export function SavingsCard({
 
       <div className="mt-4 flex flex-col gap-2 border-t border-line/60 pt-3 text-sm">
         <Field label="Banked so far"><Num value={saved} onChange={changeSaved} /></Field>
-        <Field label="Saving / month"><Num value={monthly} onChange={changeMonthly} /></Field>
+        <div className="flex items-center gap-2">
+          <span className="flex-1 text-muted">Saving / month</span>
+          <span className="tabular-nums font-medium">{money0(monthly)}</span>
+        </div>
+        <a href="/savings" className="-mt-1 self-start text-xs text-accent hover:underline">Set income & expenses in Budget & savings →</a>
         {gifts.map((g) => (
           <div key={g.id} className="flex items-center gap-2">
             <input defaultValue={g.label} onChange={(e) => changeGift(g.id, { label: e.target.value })} className="min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 hover:border-line focus:border-accent" />

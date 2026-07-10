@@ -12,14 +12,14 @@ export default async function PeoplePage() {
 
   const { data: { user } } = await supabase.auth.getUser();
   const [mRes, iRes] = await Promise.all([
-    supabase.from("wedding_members").select("user_id, role").eq("wedding_id", wedding_id),
+    supabase.from("wedding_members").select("user_id, role, allowed_modules").eq("wedding_id", wedding_id),
     supabase.from("member_invites").select("id, email, role, token, created_at").eq("wedding_id", wedding_id).is("accepted_at", null).order("created_at", { ascending: false }),
   ]);
 
   // Resolve member emails via the admin API (wedding_members only stores user_id).
   const members = await Promise.all((mRes.data ?? []).map(async (m) => {
     const { data } = await admin.auth.admin.getUserById(m.user_id);
-    return { userId: m.user_id, role: m.role as "owner" | "editor" | "viewer", email: data.user?.email ?? "(unknown)", isSelf: m.user_id === user?.id };
+    return { userId: m.user_id, role: m.role as "owner" | "editor" | "viewer", allowedModules: (m.allowed_modules as string[] | null) ?? null, email: data.user?.email ?? "(unknown)", isSelf: m.user_id === user?.id };
   }));
   members.sort((a, b) => (a.role === "owner" ? -1 : b.role === "owner" ? 1 : 0));
 

@@ -65,6 +65,17 @@ export async function changeRole(weddingId: string, userId: string, role: "owner
   return { ok: true };
 }
 
+// Limit a member to certain modules (pages). null = all modules.
+export async function setMemberModules(weddingId: string, userId: string, modules: string[] | null): Promise<Result> {
+  if (!(await callerOwner(weddingId))) return fail("Only owners can change access.");
+  const clean = modules && modules.length ? [...new Set(modules.map(String))] : null;
+  const admin = createAdminClient();
+  const { error } = await admin.from("wedding_members").update({ allowed_modules: clean }).eq("wedding_id", weddingId).eq("user_id", userId);
+  if (error) return fail(error.message);
+  revalidatePath("/settings/people");
+  return { ok: true };
+}
+
 export async function removeMember(weddingId: string, userId: string): Promise<Result> {
   const caller = await callerOwner(weddingId);
   if (!caller) return fail("Only owners can remove people.");

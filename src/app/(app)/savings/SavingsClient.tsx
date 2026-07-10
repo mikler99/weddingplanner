@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, CartesianGrid } from "recharts";
 import { money, money0 } from "@/lib/format";
 import { projectCashflow } from "@/lib/cashflow";
@@ -16,9 +18,12 @@ const kFmt = (n: number) => (Math.abs(n) >= 1000 ? `$${Math.round(n / 1000)}k` :
 const ACCENT = "#5B5BD6";
 const FREQ_NAME: Record<Frequency, string> = { monthly: "Monthly", weekly: "Weekly", biweekly: "Bi-weekly", annual: "Annual" };
 
-export function SavingsClient({ weddingId, eventIso, todayIso, saved: savedInit, partners, lines: linesInit, gifts: giftsInit, payments }: {
-  weddingId: string; eventIso: string; todayIso: string; saved: number; partners: string[]; lines: FinanceLine[]; gifts: Gift[]; payments: Pay[];
+type Scenario = { id: string; name: string; is_active: boolean };
+
+export function SavingsClient({ weddingId, eventIso, todayIso, saved: savedInit, partners, lines: linesInit, gifts: giftsInit, payments, scenarioId, isActivePlan, scenarios }: {
+  weddingId: string; eventIso: string; todayIso: string; saved: number; partners: string[]; lines: FinanceLine[]; gifts: Gift[]; payments: Pay[]; scenarioId: string; isActivePlan: boolean; scenarios: Scenario[];
 }) {
+  const router = useRouter();
   const [saved, setSaved] = useState(savedInit);
   const [lines, setLines] = useState<FinanceLine[]>(linesInit);
   const [gifts, setGifts] = useState<Gift[]>(giftsInit);
@@ -56,6 +61,17 @@ export function SavingsClient({ weddingId, eventIso, todayIso, saved: savedInit,
   return (
     <div>
       {err && <p className="mb-4 rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{err}</p>}
+
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-1.5 text-sm text-muted">
+          Plan
+          <select value={scenarioId} onChange={(e) => router.push(`/savings?scenario=${e.target.value}`)} className="rounded-md border border-line bg-surface px-2 py-1 text-sm font-medium text-ink">
+            {scenarios.map((s) => <option key={s.id} value={s.id}>{s.name}{s.is_active ? " (the plan)" : ""}</option>)}
+          </select>
+        </label>
+        {!isActivePlan && <span className="rounded-full bg-warn/10 px-2 py-0.5 text-[11px] font-semibold text-warn">viewing a non-active plan</span>}
+        <Link href={isActivePlan ? "/calendar" : `/calendar?scenario=${scenarioId}`} className="ml-auto text-sm text-accent hover:underline">See payment schedule →</Link>
+      </div>
 
       {/* ============ PERSONAL BUDGET ============ */}
       <div className="grid gap-4 lg:grid-cols-2">

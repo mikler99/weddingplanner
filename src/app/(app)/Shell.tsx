@@ -4,16 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/app/login/actions";
-
-const NAV = [
-  { href: "/", label: "Hub" },
-  { href: "/scenarios", label: "Scenarios" },
-  { href: "/budget", label: "Budget" },
-  { href: "/vendors", label: "Vendors" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/guests", label: "Guests" },
-  { href: "/documents", label: "Documents" },
-];
+import { visibleModules, GROUP_ORDER, type AppModule } from "@/lib/modules";
 
 function monogram(name: string) {
   const parts = name.split(/&|\band\b|\+/).map((s) => s.trim()).filter(Boolean);
@@ -34,11 +25,7 @@ function ThemeToggle() {
     try { localStorage.setItem("theme", next); } catch {}
   };
   return (
-    <button
-      onClick={toggle}
-      aria-label="Toggle light or dark theme"
-      className="grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-muted transition hover:text-ink"
-    >
+    <button onClick={toggle} aria-label="Toggle light or dark theme" className="grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-muted transition hover:text-ink">
       {theme === "dark" ? "☾" : "☀"}
     </button>
   );
@@ -48,71 +35,105 @@ export function Shell({
   weddingName,
   eventDate,
   role,
+  allowedModules,
   children,
 }: {
   weddingName: string;
   eventDate: string | null;
   role?: "owner" | "editor" | "viewer";
+  allowedModules?: string[] | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [pathname]); // close the drawer on navigation
+
   const isViewer = role === "viewer";
+  // Owners always see everything; others are filtered by their allowed modules.
+  const mods = visibleModules(role === "owner" ? null : allowedModules);
+
+  const sidebar = (
+    <SidebarBody weddingName={weddingName} eventDate={eventDate} mods={mods} isViewer={isViewer} pathname={pathname} onNavigate={() => setOpen(false)} />
+  );
 
   return (
-    <>
-      <header className="sticky top-0 z-20 border-b border-line bg-ground/85 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center gap-2 px-3 py-3 sm:gap-4 sm:px-6">
-          <Link href="/" className="flex flex-none items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent text-[13px] font-bold tracking-tight text-white">
-              {monogram(weddingName)}
-            </span>
-            <span className="hidden font-display text-[15px] font-semibold leading-tight lg:block">
-              {weddingName}
-              {eventDate && <span className="block font-sans text-[11px] font-normal text-muted">{eventDate}</span>}
-            </span>
-          </Link>
+    <div className="lg:flex lg:min-h-screen">
+      {/* Desktop sidebar */}
+      <aside className="sticky top-0 hidden h-screen w-60 flex-none border-r border-line bg-surface lg:block">{sidebar}</aside>
 
-          {/* Horizontally scrollable on small screens so all pillars stay reachable. */}
-          <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto sm:ml-2" style={{ scrollbarWidth: "none" }}>
-            {NAV.map((n) => (
+      {/* Mobile top bar */}
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-ground/85 px-4 py-3 backdrop-blur lg:hidden">
+        <button onClick={() => setOpen(true)} aria-label="Open menu" className="grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface text-lg leading-none text-muted">☰</button>
+        <Link href="/" className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[11px] font-bold text-white">{monogram(weddingName)}</span>
+          <span className="truncate font-display text-sm font-semibold">{weddingName}</span>
+        </Link>
+        {isViewer && <span className="ml-auto rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[10px] font-semibold text-muted">View only</span>}
+      </header>
+
+      {/* Mobile drawer */}
+      {open && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-label="Close menu" />
+          <aside className="absolute left-0 top-0 h-full w-72 max-w-[82%] border-r border-line bg-surface shadow-xl">{sidebar}</aside>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+function SidebarBody({ weddingName, eventDate, mods, isViewer, pathname, onNavigate }: {
+  weddingName: string; eventDate: string | null; mods: AppModule[]; isViewer: boolean; pathname: string; onNavigate: () => void;
+}) {
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const groups = GROUP_ORDER.filter((g) => mods.some((m) => m.group === g));
+
+  return (
+    <div className="flex h-full flex-col">
+      <Link href="/" onClick={onNavigate} className="flex items-center gap-2.5 border-b border-line px-4 py-3.5">
+        <span className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-accent text-[13px] font-bold tracking-tight text-white">{monogram(weddingName)}</span>
+        <span className="min-w-0 font-display text-[15px] font-semibold leading-tight">
+          <span className="block truncate">{weddingName}</span>
+          {eventDate && <span className="block font-sans text-[11px] font-normal text-muted">{eventDate}</span>}
+        </span>
+      </Link>
+
+      <nav className="flex-1 overflow-y-auto px-2 py-3">
+        {groups.map((g) => (
+          <div key={g} className="mb-3">
+            <p className="px-2 pb-1 text-[10px] font-bold uppercase tracking-wide text-faint">{g}</p>
+            {mods.filter((m) => m.group === g).map((m) => (
               <Link
-                key={n.href}
-                href={n.href}
-                aria-current={isActive(n.href) ? "page" : undefined}
-                className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium transition sm:px-3 ${
-                  isActive(n.href) ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink"
+                key={m.key}
+                href={m.href}
+                onClick={onNavigate}
+                aria-current={isActive(m.href) ? "page" : undefined}
+                className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition ${
+                  isActive(m.href) ? "bg-accent-weak text-accent" : "text-muted hover:bg-surface-2 hover:text-ink"
                 }`}
               >
-                {n.label}
+                <span className="w-5 flex-none text-center text-[13px]">{m.icon}</span>
+                <span className="truncate">{m.label}</span>
               </Link>
             ))}
-          </nav>
-
-          <div className="flex flex-none items-center gap-1.5 sm:gap-2">
-            {isViewer && <span title="You have view-only access" className="rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">View only</span>}
-            {!isViewer && (
-              <Link
-                href="/settings"
-                aria-current={isActive("/settings") ? "page" : undefined}
-                aria-label="Wedding details & settings"
-                title="Wedding details"
-                className={`grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface transition hover:text-ink ${isActive("/settings") ? "text-ink" : "text-muted"}`}
-              >
-                ⚙
-              </Link>
-            )}
-            <ThemeToggle />
-            <form action={signOut}>
-              <button aria-label="Sign out" title="Sign out" className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-muted transition hover:text-ink sm:px-3">
-                <span className="hidden sm:inline">Sign out</span>
-                <span className="sm:hidden">⎋</span>
-              </button>
-            </form>
           </div>
-        </div>
-      </header>
-      {children}
-    </>
+        ))}
+      </nav>
+
+      <div className="flex items-center gap-2 border-t border-line p-3">
+        {isViewer ? (
+          <span className="rounded-full border border-line bg-surface-2 px-2 py-0.5 text-[11px] font-semibold text-muted">View only</span>
+        ) : (
+          <Link href="/settings" onClick={onNavigate} aria-label="Wedding details & settings" title="Settings" className={`grid h-8 w-8 place-items-center rounded-lg border border-line bg-surface transition hover:text-ink ${pathname.startsWith("/settings") ? "text-ink" : "text-muted"}`}>⚙</Link>
+        )}
+        <ThemeToggle />
+        <form action={signOut} className="ml-auto">
+          <button className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-muted transition hover:text-ink">Sign out</button>
+        </form>
+      </div>
+    </div>
   );
 }

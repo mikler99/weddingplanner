@@ -1,4 +1,4 @@
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { createClient } from "@/lib/supabase/server";
 import { INVITE_CSS } from "@/app/i/[token]/invite-styles";
 import { DEFAULT_INVITE, fontsHref, type InviteConfig } from "@/lib/invite-config";
@@ -14,7 +14,7 @@ const PREVIEW_CSS = `
 `;
 
 export default async function InviteBuilderPage() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("guests");
   const supabase = await createClient();
   const { data } = await supabase.from("weddings").select("invite_config").eq("id", wedding_id).single();
   const config = (data?.invite_config as InviteConfig | null) ?? DEFAULT_INVITE;

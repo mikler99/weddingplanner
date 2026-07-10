@@ -62,7 +62,7 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
   const selected = config.sections.find((s) => s.id === sel);
 
   return (
-    <div className="flex flex-col lg:h-[calc(100dvh-56px)] lg:flex-row">
+    <div className="flex flex-col lg:h-screen lg:flex-row">
       {/* LEFT — sections */}
       <aside className="flex max-h-64 w-full flex-none flex-col overflow-y-auto border-b border-line bg-surface lg:max-h-none lg:w-60 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between border-b border-line px-3 py-2.5">

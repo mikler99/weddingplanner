@@ -1,9 +1,9 @@
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { loadVendors } from "@/lib/vendors";
 import { VendorsClient } from "./VendorsClient";
 
 export default async function VendorsPage() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("vendors");
   const data = await loadVendors(wedding_id);
   if (!data) return null;
 

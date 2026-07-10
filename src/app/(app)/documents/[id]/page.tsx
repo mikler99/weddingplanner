@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { ProposalSchema } from "@/lib/extract";
 import { money } from "@/lib/format";
 import { ReviewClient } from "./ReviewClient";
@@ -12,7 +12,7 @@ export default async function ReviewPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("documents");
   const supabase = await createClient();
 
   const { data: doc } = await supabase

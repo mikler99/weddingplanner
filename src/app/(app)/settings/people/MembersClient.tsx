@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { inviteMember, changeRole, removeMember, revokeInvite } from "./actions";
+import { ASSIGNABLE_MODULES } from "@/lib/modules";
+import { inviteMember, changeRole, removeMember, revokeInvite, setMemberModules } from "./actions";
 
-type Member = { userId: string; email: string; role: "owner" | "editor" | "viewer"; isSelf: boolean };
+type Member = { userId: string; email: string; role: "owner" | "editor" | "viewer"; allowedModules: string[] | null; isSelf: boolean };
 type Invite = { id: string; email: string; role: "editor" | "viewer"; token: string; created_at: string };
 const ROLE_DESC: Record<string, string> = { owner: "full access + manage people", editor: "can edit everything", viewer: "view only" };
 
@@ -52,13 +53,14 @@ export function MembersClient({ weddingId, isOwner, members, invites }: { weddin
       <div className="rounded-2xl border border-line bg-surface">
         <p className="border-b border-line px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-faint">Members</p>
         {members.map((m) => (
-          <div key={m.userId} className="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-0">
+          <div key={m.userId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-4 py-2.5 last:border-0">
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{m.email} {m.isSelf && <span className="text-xs text-faint">(you)</span>}</p>
-              <p className="text-xs text-faint">{ROLE_DESC[m.role]}</p>
+              <p className="text-xs text-faint">{ROLE_DESC[m.role]}{m.role !== "owner" && m.allowedModules ? ` · ${m.allowedModules.length} module${m.allowedModules.length === 1 ? "" : "s"}` : ""}</p>
             </div>
             {isOwner ? (
               <>
+                {m.role !== "owner" && <AccessControl weddingId={weddingId} member={m} onSaved={() => router.refresh()} />}
                 <select value={m.role} onChange={(e) => run(() => changeRole(weddingId, m.userId, e.target.value as Member["role"]))} disabled={busy} className="rounded-md border border-line bg-surface px-2 py-1 text-xs">
                   <option value="owner">Owner</option>
                   <option value="editor">Editor</option>
@@ -91,6 +93,45 @@ export function MembersClient({ weddingId, isOwner, members, invites }: { weddin
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Owner control: limit a member to specific modules (pages). All checked = full access.
+function AccessControl({ weddingId, member, onSaved }: { weddingId: string; member: Member; onSaved: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState<string[] | null>(member.allowedModules);
+  const [busy, start] = useTransition();
+  const allKeys = ASSIGNABLE_MODULES.map((m) => m.key);
+  const checked = (k: string) => !sel || sel.includes(k);
+  const label = !sel ? "Full access" : `${sel.length} module${sel.length === 1 ? "" : "s"}`;
+
+  const toggle = (k: string) => {
+    const cur = sel ?? [...allKeys];
+    const next = cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k];
+    const val = next.length >= allKeys.length ? null : next; // all → "full access" (null)
+    setSel(val);
+    start(async () => { await setMemberModules(weddingId, member.userId, val); onSaved(); });
+  };
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} className="rounded-md border border-line bg-surface px-2 py-1 text-xs text-muted hover:text-ink">{label} ▾</button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-line bg-surface p-2 shadow-lg">
+            <p className="px-1 pb-1 text-[11px] text-muted">Can see these pages:</p>
+            {ASSIGNABLE_MODULES.map((m) => (
+              <label key={m.key} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-surface-2">
+                <input type="checkbox" checked={checked(m.key)} onChange={() => toggle(m.key)} disabled={busy} className="h-3.5 w-3.5 accent-[var(--accent)]" />
+                <span>{m.icon} {m.label}</span>
+              </label>
+            ))}
+            <p className="px-1 pt-1 text-[10px] text-faint">Hub is always visible.</p>
+          </div>
+        </>
       )}
     </div>
   );

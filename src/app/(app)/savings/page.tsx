@@ -1,4 +1,4 @@
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { createClient } from "@/lib/supabase/server";
 import { loadPlanContext } from "@/lib/budget-data";
 import { resolveDue, type DueRule } from "@/lib/payments";
@@ -6,17 +6,19 @@ import { partnerNames } from "@/lib/couple";
 import type { FinanceLine } from "@/lib/finance";
 import { SavingsClient } from "./SavingsClient";
 
-export default async function SavingsPage() {
-  const { wedding_id } = await requireMembership();
+export default async function SavingsPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
+  const { wedding_id } = await requireModule("savings");
+  const { scenario } = await searchParams;
   const supabase = await createClient();
-  const ctx = await loadPlanContext(supabase, wedding_id);
+  const ctx = await loadPlanContext(supabase, wedding_id, scenario);
 
-  const [wRes, cRes, gRes, pRes, fRes] = await Promise.all([
+  const [wRes, cRes, gRes, pRes, fRes, scensRes] = await Promise.all([
     supabase.from("weddings").select("name, event_date").eq("id", wedding_id).single(),
     supabase.from("budget_config").select("saved").eq("wedding_id", wedding_id).single(),
     supabase.from("gifts").select("id, label, amount, on_date, sort").eq("wedding_id", wedding_id).order("sort"),
     ctx ? supabase.from("payments").select("amount, due_date, due_rule, paid").eq("scenario_id", ctx.scenarioId) : Promise.resolve({ data: [] }),
     supabase.from("finance_lines").select("id, kind, label, amount, frequency, person, category, sort").eq("wedding_id", wedding_id).order("sort"),
+    supabase.from("scenarios").select("id, name, is_active").eq("wedding_id", wedding_id).order("sort").order("created_at"),
   ]);
   const eventDate = wRes.data?.event_date ?? null;
   if (!eventDate) return null;
@@ -47,6 +49,9 @@ export default async function SavingsPage() {
         lines={lines}
         gifts={(gRes.data ?? []).map((g) => ({ id: g.id, label: g.label, amount: Number(g.amount), on_date: g.on_date }))}
         payments={payments}
+        scenarioId={ctx?.scenarioId ?? ""}
+        isActivePlan={ctx?.isActive ?? true}
+        scenarios={(scensRes.data ?? []) as { id: string; name: string; is_active: boolean }[]}
       />
     </main>
   );

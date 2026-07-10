@@ -3,26 +3,30 @@ import { requireMembership } from "@/lib/wedding";
 import { loadDashboard } from "@/lib/dashboard-data";
 import { listScenarios } from "@/lib/scenarios";
 import { money, money0 } from "@/lib/format";
+import { visibleModules, type ModuleKey } from "@/lib/modules";
 import { setBudgetTarget } from "./home-actions";
 import { Checklist } from "./Checklist";
 import { PlanSwitcher } from "./PlanSwitcher";
 
-const PILLARS = [
-  { href: "/budget", title: "Budget", desc: "Live totals from guests + vendors", live: true },
-  { href: "/documents", title: "Documents", desc: "Upload quotes, extract with AI", live: true },
-  { href: "/vendors", title: "Vendors", desc: "Suppliers, status & contracts", live: true },
-  { href: "/calendar", title: "Calendar", desc: "Payment plan & to-dos on a timeline", live: true },
-  { href: "/savings", title: "Budget & savings", desc: "Personal budget → savings & cash-flow", live: true },
-  { href: "/guests", title: "Guests & RSVP", desc: "Guest list, headcount, responses", live: true },
-];
-
 export default async function Home() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id, role, allowedModules } = await requireMembership();
   const [d, scenarios] = await Promise.all([loadDashboard(wedding_id), listScenarios(wedding_id)]);
   if (!d) return null;
 
-  const { wedding: w, budget: b } = d;
+  const { wedding: w, budget: b, cash, counts } = d;
   const overTarget = w.budget_target != null && b.expense > w.budget_target;
+
+  // Pillar cards (all modules except Hub) with live status, filtered by access.
+  const pillars = visibleModules(role === "owner" ? null : allowedModules).filter((m) => m.group !== "Overview");
+  const meta: Partial<Record<ModuleKey, string>> = {
+    scenarios: `${scenarios.length} plan${scenarios.length === 1 ? "" : "s"}`,
+    budget: money0(b.expense),
+    vendors: counts.vendorsBooked ? `${counts.vendorsBooked} booked` : `${counts.vendors} vendor${counts.vendors === 1 ? "" : "s"}`,
+    calendar: d.payments.length ? `${d.payments.length} payment${d.payments.length === 1 ? "" : "s"} coming up` : "nothing due",
+    savings: cash.shortfall ? "behind plan" : "on track",
+    guests: counts.guestsTotal ? `${counts.guestsResponded}/${counts.guestsTotal} replied` : "no guests yet",
+    documents: `${counts.documents} document${counts.documents === 1 ? "" : "s"}`,
+  };
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -46,14 +50,14 @@ export default async function Home() {
         <Stat label={b.balance < 0 ? "Shortfall" : "Surplus"} value={money0(Math.abs(b.balance))} tone={b.balance < 0 ? "bad" : "good"} />
       </section>
 
-      {/* Savings status */}
-      <section className={`mt-4 rounded-2xl border p-5 ${b.onTrack ? "border-good/30 bg-good/10" : "border-warn/30 bg-warn/10"}`}>
+      {/* Cash-flow status (same engine as /savings) */}
+      <section className={`mt-4 rounded-2xl border p-5 ${cash.shortfall ? "border-warn/30 bg-warn/10" : "border-good/30 bg-good/10"}`}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm font-semibold">{b.onTrack ? "On track" : "Behind plan"}</p>
+          <p className="text-sm font-semibold">{cash.shortfall ? "Behind plan" : "On track"}</p>
           <p className="text-sm text-muted">
-            Save <span className="font-semibold text-ink">{money(b.neededMonthly)}/mo</span> to cover{" "}
-            {money0(b.expense)} across {b.months} months
-            {d.monthly > 0 && ` · currently saving ${money0(d.monthly)}/mo`}
+            {cash.shortfall
+              ? <>Save <span className="font-semibold text-ink">{money(cash.neededMonthly)}/mo</span> to stay positive · lowest {money0(cash.lowestBalance)}</>
+              : <>Setting aside <span className="font-semibold text-ink">{money(cash.capacity)}/mo</span> · projected {money0(cash.projectedAtWedding)} at the wedding</>}
           </p>
         </div>
         <Link href="/savings" className="mt-1 inline-block text-xs text-accent hover:underline">
@@ -82,20 +86,15 @@ export default async function Home() {
       <section className="mt-8">
         <h2 className="mb-3 text-sm font-semibold text-muted">Everything in one place</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {PILLARS.map((p) =>
-            p.live ? (
-              <Link key={p.title} href={p.href} className="rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:shadow-md">
-                <p className="text-sm font-medium">{p.title} →</p>
-                <p className="mt-0.5 text-xs text-muted">{p.desc}</p>
-              </Link>
-            ) : (
-              <div key={p.title} className="rounded-2xl border border-dashed border-line p-4 opacity-60">
-                <p className="text-sm font-medium">{p.title}</p>
-                <p className="mt-0.5 text-xs text-muted">{p.desc}</p>
-                <p className="mt-1 text-[10px] uppercase tracking-wide text-faint">Soon</p>
+          {pillars.map((m) => (
+            <Link key={m.key} href={m.href} className="rounded-2xl border border-line bg-surface p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">{m.icon} {m.label} →</p>
+                {meta[m.key] && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-muted">{meta[m.key]}</span>}
               </div>
-            )
-          )}
+              <p className="mt-1 text-xs text-muted">{m.desc}</p>
+            </Link>
+          ))}
         </div>
       </section>
     </main>

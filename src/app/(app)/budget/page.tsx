@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { loadBudgetOverview } from "@/lib/categories";
 import { money, money0 } from "@/lib/format";
 import { listScenarios } from "@/lib/scenarios";
@@ -11,7 +11,7 @@ import { ScenarioBar } from "../ScenarioBar";
 import { PackageForm } from "./PackageForm";
 
 export default async function BudgetOverview({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("budget");
   const { scenario } = await searchParams;
   const [o, scenarios] = await Promise.all([loadBudgetOverview(wedding_id, scenario), listScenarios(wedding_id)]);
   if (!o) notFound();

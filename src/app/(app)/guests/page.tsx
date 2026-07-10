@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { loadGuests } from "@/lib/guests";
 import { GuestsClient } from "./GuestsClient";
 
 export default async function GuestsPage() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("guests");
   const data = await loadGuests(wedding_id);
   if (!data) return null;
 

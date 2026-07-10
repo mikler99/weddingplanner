@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { loadCategory } from "@/lib/categories";
 import { CategoryClient } from "./CategoryClient";
 
@@ -10,7 +10,7 @@ export default async function CategoryPage({
 }) {
   const { slug } = await params;
   const { scenario } = await searchParams;
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("budget");
   const view = await loadCategory(wedding_id, slug, scenario);
   if (!view) notFound();
   return <CategoryClient view={view} />;

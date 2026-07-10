@@ -84,13 +84,15 @@ export async function toggleScenarioItem(scenarioId: string, itemId: string, on:
     revalidatePath("/", "layout");
     return error ? fail(error.message) : ok;
   }
-  const item = (await supabase.from("budget_items").select("group_key, wedding_id").eq("id", itemId).single()).data;
+  const item = (await supabase.from("budget_items").select("group_key, wedding_id, vendor_id").eq("id", itemId).single()).data;
   if (item?.group_key) {
     const sibs = (await supabase.from("budget_items").select("id").eq("wedding_id", item.wedding_id).eq("group_key", item.group_key)).data ?? [];
     const sibIds = sibs.map((s) => s.id).filter((sid) => sid !== itemId);
     if (sibIds.length) await supabase.from("scenario_items").delete().eq("scenario_id", scenarioId).in("item_id", sibIds);
   }
   const { error } = await supabase.from("scenario_items").upsert({ scenario_id: scenarioId, item_id: itemId });
+  // Choosing an option in a plan books its vendor (unless you've marked it Passed).
+  if (item?.vendor_id) await supabase.from("vendors").update({ status: "Booked" }).eq("id", item.vendor_id).neq("status", "Passed");
   revalidatePath("/", "layout");
   return error ? fail(error.message) : ok;
 }

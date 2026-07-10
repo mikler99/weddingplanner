@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { loadScenarios } from "@/lib/scenarios";
 import { ScenariosBoard } from "./ScenariosBoard";
 
 export default async function ScenariosPage() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("scenarios");
   const view = await loadScenarios(wedding_id);
   if (!view) notFound();
   return (

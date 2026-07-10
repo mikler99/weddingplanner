@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { requireMembership } from "@/lib/wedding";
+import { requireModule } from "@/lib/wedding";
 import { UploadForm } from "./UploadForm";
 import { DeleteDocButton } from "./DeleteDocButton";
 
 export default async function DocumentsPage() {
-  const { wedding_id } = await requireMembership();
+  const { wedding_id } = await requireModule("documents");
   const supabase = await createClient();
 
   const { data: docs } = await supabase
