@@ -32,7 +32,7 @@ export function pageBySlug(site: SiteConfig, slug?: string): SitePage {
 export const DEFAULT_SITE: SiteConfig = normalizeSite(DEFAULT_INVITE);
 
 // ---- Page templates (for the builder's "Add page") --------------------------
-export type PageTemplateKey = "home" | "story" | "schedule" | "gifts" | "faq" | "gallery" | "party" | "rsvp" | "custom";
+export type PageTemplateKey = "home" | "story" | "schedule" | "gifts" | "faq" | "gallery" | "party" | "rsvp" | "weddingday" | "custom";
 export const PAGE_TEMPLATES: { key: PageTemplateKey; label: string; hint: string }[] = [
   { key: "story", label: "Our Story", hint: "How you met + a photo" },
   { key: "schedule", label: "Schedule", hint: "Timeline of the day" },
@@ -41,6 +41,7 @@ export const PAGE_TEMPLATES: { key: PageTemplateKey; label: string; hint: string
   { key: "gallery", label: "Gallery", hint: "A photo grid" },
   { key: "party", label: "Wedding Party", hint: "The lineup" },
   { key: "rsvp", label: "RSVP", hint: "The reply form" },
+  { key: "weddingday", label: "Wedding Day", hint: "Live camera, guestbook & song requests" },
   { key: "custom", label: "Blank page", hint: "Start from a text block" },
   { key: "home", label: "Home", hint: "Hero + countdown" },
 ];
@@ -57,6 +58,7 @@ export function newPage(key: PageTemplateKey, seed: number): SitePage {
     case "gallery": return { id, slug: "gallery", title: "Gallery", showInNav: true, sections: [s("gallery")] };
     case "party": return { id, slug: "party", title: "Wedding Party", showInNav: true, sections: [s("party")] };
     case "rsvp": return { id, slug: "rsvp", title: "RSVP", showInNav: true, sections: [s("rsvp")] };
+    case "weddingday": return { id, slug: "wedding-day", title: "Wedding Day", showInNav: true, sections: [s("camera"), s("guestbook"), s("songs")] };
     case "custom": return { id, slug: `page-${seed}`, title: "New page", showInNav: true, sections: [s("richText")] };
   }
 }

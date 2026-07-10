@@ -157,4 +157,40 @@ export const INVITE_CSS = `
 .invite .pm-photo{width:120px;height:120px;margin:0 auto 10px;border-radius:50%;background:center/cover no-repeat;border:1px solid rgba(201,168,106,.34)}
 .invite .party-member h4{font-family:var(--font-display),serif;font-weight:500;font-size:1.3rem;color:var(--ink)}
 .invite .party-member p{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;color:var(--gold);margin-top:2px}
+
+/* Wedding-day app: camera, guestbook, songs */
+.invite .wd-input{width:100%;font-family:var(--font-display),serif;font-size:1.1rem;color:var(--ink);padding:12px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(201,168,106,.3);border-radius:3px;outline:none}
+.invite .wd-input::placeholder{color:var(--ink-dim)}
+.invite .wd-input:focus{border-color:var(--gold)}
+.invite textarea.wd-input{resize:vertical;line-height:1.5}
+.invite .wd-ph{min-height:44px;background:rgba(255,255,255,.03)}
+.invite .wd-shutter{margin-top:4px;font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;color:#0e0a06;background:linear-gradient(var(--gold-2),var(--gold));border:none;padding:14px 28px;border-radius:3px;cursor:pointer;transition:filter .2s}
+.invite .wd-shutter:hover{filter:brightness(1.08)}
+.invite .wd-shutter:disabled{opacity:.6;cursor:default}
+.invite .wd-cam-controls,.invite .wd-gb-form,.invite .wd-song-form{display:flex;flex-direction:column;gap:12px;max-width:440px;margin:24px auto 0}
+.invite .wd-err{color:#e6a5a5;font-size:.98rem;margin:0}
+.invite .wd-empty{margin-top:24px;font-family:var(--font-display),serif;font-style:italic;font-size:1.14rem;color:var(--ink-soft)}
+.invite .wd-prompt{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:520px;margin:22px auto 0;padding:14px 18px;background:rgba(201,168,106,.1);border:1px solid rgba(201,168,106,.28);border-radius:4px}
+.invite .wd-prompt-eyebrow{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.18em;font-size:.58rem;color:var(--gold)}
+.invite .wd-prompt-text{font-family:var(--font-display),serif;font-style:italic;font-size:1.24rem;color:var(--ink)}
+.invite .wd-shuffle{background:none;border:1px solid rgba(201,168,106,.4);color:var(--gold-2);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:1rem;line-height:1}
+.invite .wd-qr-toggle{background:none;border:none;color:var(--gold-2);font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.invite .wd-qr{margin:8px auto 0;text-align:center}
+.invite .wd-qr-img{width:180px;height:180px;margin:0 auto;background:#f6efe0;padding:8px;border-radius:6px}
+.invite .wd-qr p{font-size:.9rem;color:var(--ink-soft);margin-top:8px}
+.invite .wd-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:30px}
+.invite .wd-shot{margin:0;position:relative;border-radius:2px;overflow:hidden;background:rgba(0,0,0,.3);box-shadow:0 10px 24px -14px rgba(0,0,0,.7)}
+.invite .wd-shot img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
+.invite .wd-shot figcaption{position:absolute;left:0;right:0;bottom:0;padding:16px 10px 8px;font-family:var(--font-display),serif;font-size:.98rem;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.72))}
+.invite .wd-shot .wd-by{color:var(--gold-2)}
+.invite .wd-notes{max-width:560px;margin:30px auto 0;text-align:left;display:flex;flex-direction:column;gap:14px}
+.invite .wd-note{margin:0;padding:16px 18px;background:rgba(255,255,255,.04);border-left:2px solid var(--gold);border-radius:2px}
+.invite .wd-note p{font-family:var(--font-display),serif;font-size:1.2rem;font-style:italic;color:var(--ink);line-height:1.55}
+.invite .wd-note cite{display:block;margin-top:8px;font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:.6rem;color:var(--gold);font-style:normal}
+.invite .wd-when{color:var(--ink-dim);letter-spacing:.08em}
+.invite .wd-songlist{list-style:none;max-width:520px;margin:28px auto 0;padding:0;text-align:left}
+.invite .wd-songlist li{padding:12px 4px;border-bottom:1px solid rgba(201,168,106,.14);color:var(--ink-soft);font-size:1.05rem}
+.invite .wd-song-title{font-family:var(--font-display),serif;font-size:1.2rem;color:var(--ink)}
+.invite .wd-song-artist{color:var(--ink-soft)}
+@media(max-width:560px){.invite .wd-gallery{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}}
 `;

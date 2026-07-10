@@ -8,7 +8,7 @@ import { SECTION_META, FONT_OPTIONS, THEME_PRESETS, newSection, fontsHref, type 
 import { type SiteConfig, type SitePage, PAGE_TEMPLATES, type PageTemplateKey, newPage, uniqueSlug } from "@/lib/site-config";
 import { saveInviteConfig } from "./actions";
 
-const ADDABLE: SectionType[] = ["hero", "story", "photoBand", "details", "countdown", "schedule", "gallery", "party", "faq", "gifts", "richText", "rsvp", "footer"];
+const ADDABLE: SectionType[] = ["hero", "story", "photoBand", "details", "countdown", "schedule", "gallery", "party", "faq", "gifts", "richText", "camera", "guestbook", "songs", "rsvp", "footer"];
 
 export function BuilderClient({ weddingId, initial }: { weddingId: string; initial: SiteConfig }) {
   const [site, setSite] = useState<SiteConfig>(initial);
@@ -292,6 +292,19 @@ function SectionInspector({ section, weddingId, onChange }: { section: Section; 
         <Text label="Small label (optional)" value={s.label} onChange={(v) => P({ label: v } as Partial<Section>)} />
         <Text label="Heading" value={s.heading} onChange={(v) => P({ heading: v } as Partial<Section>)} />
         <Area label="Body" value={s.body} onChange={(v) => P({ body: v } as Partial<Section>)} />
+      </>)}
+      {s.type === "camera" && (<>
+        <Text label="Small label" value={s.label} onChange={(v) => P({ label: v } as Partial<Section>)} />
+        <Text label="Heading" value={s.heading} onChange={(v) => P({ heading: v } as Partial<Section>)} />
+        <Area label="Message" value={s.lead} onChange={(v) => P({ lead: v } as Partial<Section>)} />
+        <Repeater<{ text: string }> label="Photo challenges (optional)" items={s.prompts.map((text) => ({ text }))} empty={{ text: "" }} onChange={(items) => P({ prompts: items.map((i) => i.text) } as Partial<Section>)} render={(it, set) => (<Text label="Prompt" value={it.text} onChange={(v) => set({ text: v })} />)} />
+        <p className="mt-2 text-xs text-faint">On the live site, guests snap photos into a shared gallery. A random challenge is shown each time.</p>
+      </>)}
+      {(s.type === "guestbook" || s.type === "songs") && (<>
+        <Text label="Small label" value={s.label} onChange={(v) => P({ label: v } as Partial<Section>)} />
+        <Text label="Heading" value={s.heading} onChange={(v) => P({ heading: v } as Partial<Section>)} />
+        <Area label="Message" value={s.lead} onChange={(v) => P({ lead: v } as Partial<Section>)} />
+        <p className="mt-2 text-xs text-faint">Guests’ {s.type === "guestbook" ? "well-wishes" : "song requests"} appear here live on the wedding day.</p>
       </>)}
       {s.type === "footer" && (<>
         <div className="grid grid-cols-2 gap-2"><Text label="Name 1" value={s.name1} onChange={(v) => P({ name1: v } as Partial<Section>)} /><Text label="Name 2" value={s.name2} onChange={(v) => P({ name2: v } as Partial<Section>)} /></div>

@@ -5,6 +5,7 @@ import { themeVars } from "@/lib/invite-config";
 import { pageBySlug, type SiteConfig } from "@/lib/site-config";
 import { RsvpForm, SiteRsvpLookup, type InviteGuest } from "./RsvpForm";
 import { InviteMotion } from "./InviteMotion";
+import { CameraBlock, GuestbookBlock, SongsBlock } from "@/app/w/WeddingApp";
 
 type Mode = "live" | "preview";
 
@@ -239,7 +240,55 @@ function SectionView({ s, mode, token, guest, slug }: { s: Section; mode: Mode; 
           <div className={rk(mode, "lead", "d1")}>{s.body.split("\n").map((p, i) => (<span key={i}>{i > 0 && <br />}{p}</span>))}</div>
         </div></section>
       );
+    case "camera":
+      return (
+        <section className="sep-top"><div className="wrap">
+          {s.label && <div className={rk(mode, "label")}>{s.label}</div>}
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          {s.lead && <div className={rk(mode, "lead", "d1")} style={{ fontSize: "1.14rem" }}>{s.lead}</div>}
+          {mode === "live" && slug ? <div className={rk(mode, "", "d2")}><CameraBlock slug={slug} prompts={s.prompts} /></div> : <AppPreview kind="camera" prompts={s.prompts} />}
+        </div></section>
+      );
+    case "guestbook":
+      return (
+        <section className="sep-top"><div className="wrap">
+          {s.label && <div className={rk(mode, "label")}>{s.label}</div>}
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          {s.lead && <div className={rk(mode, "lead", "d1")} style={{ fontSize: "1.14rem" }}>{s.lead}</div>}
+          {mode === "live" && slug ? <div className={rk(mode, "", "d2")}><GuestbookBlock slug={slug} /></div> : <AppPreview kind="guestbook" />}
+        </div></section>
+      );
+    case "songs":
+      return (
+        <section className="sep-top"><div className="wrap">
+          {s.label && <div className={rk(mode, "label")}>{s.label}</div>}
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          {s.lead && <div className={rk(mode, "lead", "d1")} style={{ fontSize: "1.14rem" }}>{s.lead}</div>}
+          {mode === "live" && slug ? <div className={rk(mode, "", "d2")}><SongsBlock slug={slug} /></div> : <AppPreview kind="songs" />}
+        </div></section>
+      );
   }
+}
+
+// Static stand-in for the interactive wedding-day blocks, shown in the builder
+// preview (where there's no slug / live data).
+function AppPreview({ kind, prompts }: { kind: "camera" | "guestbook" | "songs"; prompts?: string[] }) {
+  if (kind === "camera") return (
+    <div className="wd-camera">
+      {prompts?.[0] && <div className="wd-prompt"><span className="wd-prompt-eyebrow">Photo challenge</span><span className="wd-prompt-text">{prompts[0]}</span></div>}
+      <div className="wd-cam-controls"><div className="wd-input wd-ph" /><button type="button" className="wd-shutter">📷 Take a photo</button></div>
+      <p className="wd-empty">Guests’ photos appear here on the day.</p>
+    </div>
+  );
+  if (kind === "guestbook") return (
+    <div className="wd-guestbook"><div className="wd-gb-form"><div className="wd-input wd-ph" /><div className="wd-input wd-ph" style={{ height: 64 }} /><button type="button" className="wd-shutter">Sign the guestbook</button></div></div>
+  );
+  return (
+    <div className="wd-songs"><div className="wd-song-form"><div className="wd-input wd-ph" /><div className="wd-input wd-ph" /><button type="button" className="wd-shutter">🎵 Request this song</button></div></div>
+  );
 }
 
 // Non-functional replica of the RSVP form for the builder preview.
