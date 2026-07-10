@@ -150,14 +150,17 @@ export async function applyExtraction(payload: z.infer<typeof ApplyPayload>): Pr
   }));
 
   // Clear prior apply from this document, then insert fresh (idempotent re-Apply).
-  // budget_items are a wedding-level pool; payments only re-apply within the active plan.
+  // budget_items are a wedding-level pool; payments only re-apply within the active
+  // plan (and are skipped entirely if there's no active scenario to own them).
   const delItems = await supabase.from("budget_items").delete().eq("source_document_id", documentId);
   if (delItems.error) return { ok: false, error: delItems.error.message };
-  const delPays = await supabase.from("payments").delete().eq("source_document_id", documentId).eq("scenario_id", activeScenario ?? "");
-  if (delPays.error) return { ok: false, error: delPays.error.message };
+  if (activeScenario) {
+    const delPays = await supabase.from("payments").delete().eq("source_document_id", documentId).eq("scenario_id", activeScenario);
+    if (delPays.error) return { ok: false, error: delPays.error.message };
+  }
   const inserts = [
     items.length && supabase.from("budget_items").insert(items),
-    payments.length && supabase.from("payments").insert(payments),
+    activeScenario && payments.length && supabase.from("payments").insert(payments),
   ].filter(Boolean);
   for (const ins of inserts) {
     const { error } = await ins as { error: { message: string } | null };

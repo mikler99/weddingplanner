@@ -4,15 +4,19 @@ import { requireModule } from "@/lib/wedding";
 import { UploadForm } from "./UploadForm";
 import { DeleteDocButton } from "./DeleteDocButton";
 
-export default async function DocumentsPage() {
+export default async function DocumentsPage({ searchParams }: { searchParams: Promise<{ vendor?: string }> }) {
   const { wedding_id } = await requireModule("documents");
+  const { vendor } = await searchParams;
   const supabase = await createClient();
 
-  const { data: docs } = await supabase
+  let q = supabase
     .from("documents")
     .select("id, label, kind, vendor_name, extracted, storage_path")
     .eq("wedding_id", wedding_id)
     .order("sort");
+  if (vendor) q = q.eq("vendor_id", vendor);
+  const { data: docs } = await q;
+  const vendorName = vendor ? (await supabase.from("vendors").select("name").eq("id", vendor).maybeSingle()).data?.name ?? null : null;
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
@@ -25,6 +29,13 @@ export default async function DocumentsPage() {
         </div>
         <Link href="/" className="text-sm text-muted hover:underline">← Home</Link>
       </header>
+
+      {vendor && (
+        <p className="mb-4 flex items-center justify-between rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm">
+          <span className="text-muted">Documents for <span className="font-medium text-ink">{vendorName ?? "this vendor"}</span></span>
+          <Link href="/documents" className="text-accent hover:underline">Show all</Link>
+        </p>
+      )}
 
       <UploadForm weddingId={wedding_id} />
 

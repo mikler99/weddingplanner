@@ -98,7 +98,7 @@ function VendorCardView({ v, isOpen, onToggle, patch, onRemove }: { v: VendorCar
           <Labeled label="Next step"><TextField value={v.next_step ?? ""} onSet={(val) => patch({ next_step: val || null })} placeholder="e.g. sign contract" className="w-full" small /></Labeled>
           <Labeled label="Notes"><textarea value={v.notes ?? ""} onChange={(e) => patch({ notes: e.target.value || null })} rows={2} className="w-full resize-y rounded-md border border-line bg-surface px-2 py-1 text-sm" /></Labeled>
           <div className="mt-1 flex gap-3 text-xs">
-            <Link href="/documents" className="text-accent hover:underline">Documents →</Link>
+            <Link href={`/documents?vendor=${v.id}`} className="text-accent hover:underline">Documents{v.docCount ? ` (${v.docCount})` : ""} →</Link>
             <Link href="/budget" className="text-accent hover:underline">Options in Budget →</Link>
           </div>
         </div>

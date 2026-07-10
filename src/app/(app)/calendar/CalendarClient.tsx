@@ -225,14 +225,22 @@ export function CalendarClient({ weddingId, scenarioId, scenarios, isActivePlan,
             </div>
             <div className="space-y-1.5">
               {sortedTasks.map((t) => (
-                <div key={t.id} className="group flex items-center gap-2 rounded-lg border border-line p-2">
-                  <input type="checkbox" checked={t.done} onChange={(e) => patchTask(t.id, { done: e.target.checked })} className="h-4 w-4 flex-none accent-[var(--accent)]" />
-                  <TextField value={t.task} onSet={(v) => patchTask(t.id, { task: v })} className={`min-w-0 flex-1 text-sm ${t.done ? "text-faint line-through" : ""}`} placeholder="To-do" />
-                  <DateControl when={taskWhen(t)} dueDate={t.due_date} eventDate={ev} compact
-                    onDate={(iso) => patchTask(t.id, { due_date: iso, due_rule: null })}
-                    onRule={(rule) => patchTask(t.id, { due_rule: rule, due_date: null })}
-                    onClear={() => patchTask(t.id, { due_date: null, due_rule: null })} />
-                  <button onClick={() => delTask(t.id)} className="flex-none text-faint opacity-0 transition group-hover:opacity-100 hover:text-bad">×</button>
+                <div key={t.id} className="group rounded-lg border border-line p-2">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={t.done} onChange={(e) => patchTask(t.id, { done: e.target.checked })} className="h-4 w-4 flex-none accent-[var(--accent)]" />
+                    <TextField value={t.task} onSet={(v) => patchTask(t.id, { task: v })} className={`min-w-0 flex-1 text-sm ${t.done ? "text-faint line-through" : ""}`} placeholder="To-do" />
+                    <button onClick={() => delTask(t.id)} className="flex-none text-faint opacity-0 transition group-hover:opacity-100 hover:text-bad">×</button>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <DateControl when={taskWhen(t)} dueDate={t.due_date} eventDate={ev} compact
+                      onDate={(iso) => patchTask(t.id, { due_date: iso, due_rule: null })}
+                      onRule={(rule) => patchTask(t.id, { due_rule: rule, due_date: null })}
+                      onClear={() => patchTask(t.id, { due_date: null, due_rule: null })} />
+                    <select value={t.vendor_id ?? ""} onChange={(e) => patchTask(t.id, { vendor_id: e.target.value || null })} className="max-w-[120px] rounded-md border border-line bg-surface px-1 py-1 text-xs text-muted">
+                      <option value="">no vendor</option>
+                      {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                  </div>
                 </div>
               ))}
               <button onClick={addTask} className="w-full rounded-lg border border-dashed border-line py-1.5 text-xs text-muted hover:text-ink">+ Add to-do</button>
