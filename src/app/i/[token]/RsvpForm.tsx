@@ -1,7 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitRsvp } from "./actions";
+import { findInvite } from "@/app/w/actions";
+
+// Public-site RSVP for a guest who didn't arrive via their personal link: find
+// their invitation by name, which sets the guest cookie → the form personalizes.
+export function SiteRsvpLookup({ slug }: { slug: string }) {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, start] = useTransition();
+  const go = () => start(async () => {
+    const r = await findInvite(slug, name);
+    if (!r.ok) setMsg(r.error ?? "Something went wrong.");
+    else if (!r.found) setMsg("We couldn't find that name. Check your invitation email for your personal link, or try the exact name it was addressed to.");
+    else router.refresh();
+  });
+  return (
+    <form className="rform" onSubmit={(e) => { e.preventDefault(); go(); }}>
+      <div className="field">
+        <label htmlFor="find-name">Find your invitation</label>
+        <input id="find-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="The name on your invitation" />
+      </div>
+      {msg && <p style={{ color: "var(--ink-soft)", fontSize: "1rem", margin: "0 0 12px" }}>{msg}</p>}
+      <button type="submit" disabled={busy}>{busy ? "Looking…" : "Continue"}</button>
+    </form>
+  );
+}
 
 export type InviteGuest = {
   name: string;

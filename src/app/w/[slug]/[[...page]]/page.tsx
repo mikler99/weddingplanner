@@ -44,7 +44,7 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
       <link rel="stylesheet" href={fontsHref(site.theme)} />
       <style dangerouslySetInnerHTML={{ __html: INVITE_CSS }} />
       <noscript><style dangerouslySetInnerHTML={{ __html: ".invite .rise{opacity:1;transform:none}" }} /></noscript>
-      <SiteRenderer site={site} pageSlug={pageSlug} mode="live" base={`/w/${slug}`} token={token} guest={guest} />
+      <SiteRenderer site={site} pageSlug={pageSlug} mode="live" base={`/w/${slug}`} slug={slug} token={token} guest={guest} />
     </>
   );
 }

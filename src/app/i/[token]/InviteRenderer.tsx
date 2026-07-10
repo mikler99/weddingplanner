@@ -3,7 +3,7 @@
 import type { InviteConfig, Section } from "@/lib/invite-config";
 import { themeVars } from "@/lib/invite-config";
 import { pageBySlug, type SiteConfig } from "@/lib/site-config";
-import { RsvpForm, type InviteGuest } from "./RsvpForm";
+import { RsvpForm, SiteRsvpLookup, type InviteGuest } from "./RsvpForm";
 import { InviteMotion } from "./InviteMotion";
 
 type Mode = "live" | "preview";
@@ -29,8 +29,8 @@ export function InviteRenderer({ config, mode, token, guest }: { config: InviteC
 }
 
 // Renders ONE page of a multi-page site + a themed top nav (when >1 page).
-export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "" }: {
-  site: SiteConfig; pageSlug?: string; mode: Mode; token?: string; guest?: InviteGuest; base?: string;
+export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", slug }: {
+  site: SiteConfig; pageSlug?: string; mode: Mode; token?: string; guest?: InviteGuest; base?: string; slug?: string;
 }) {
   const page = pageBySlug(site, pageSlug);
   const hero = page.sections.find((s) => s.type === "hero") as Extract<Section, { type: "hero" }> | undefined;
@@ -54,7 +54,7 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "" }: 
           </nav>
         )}
         {page.sections.filter((s) => s.visible).map((s) => (
-          <SectionView key={s.id} s={s} mode={mode} token={token} guest={guest} />
+          <SectionView key={s.id} s={s} mode={mode} token={token} guest={guest} slug={slug} />
         ))}
       </div>
       {mode === "live" && countdown && <InviteMotion targetIso={countdown.targetIso} />}
@@ -65,7 +65,7 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "" }: 
 // rise helper: reveal-on-scroll only in the live invite; always-visible in the builder
 const rk = (mode: Mode, base: string, delay?: string) => (mode === "live" ? `${base} rise${delay ? " " + delay : ""}` : base);
 
-function SectionView({ s, mode, token, guest }: { s: Section; mode: Mode; token?: string; guest?: InviteGuest }) {
+function SectionView({ s, mode, token, guest, slug }: { s: Section; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
   switch (s.type) {
     case "hero":
       return (
@@ -156,7 +156,7 @@ function SectionView({ s, mode, token, guest }: { s: Section; mode: Mode; token?
             <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
             <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
             <div className={rk(mode, "lead", "d1")} style={{ fontSize: "1.14rem" }}>{s.lead}</div>
-            {mode === "live" && token && guest ? <RsvpForm token={token} guest={guest} /> : <RsvpPreview />}
+            {mode !== "live" ? <RsvpPreview /> : token && guest ? <RsvpForm token={token} guest={guest} /> : slug ? <SiteRsvpLookup slug={slug} /> : <RsvpPreview />}
           </div>
         </section>
       );
