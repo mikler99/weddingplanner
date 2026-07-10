@@ -10,7 +10,8 @@ import {
 } from "@/lib/site-nodes";
 import { RsvpForm, SiteRsvpLookup, type InviteGuest } from "./RsvpForm";
 import { InviteMotion } from "./InviteMotion";
-import { CameraBlock, GuestbookBlock, SongsBlock } from "@/app/w/WeddingApp";
+import { CameraBlock, ScavengerBlock, GuestbookBlock, SongsBlock } from "@/app/w/WeddingApp";
+import { Lightbox } from "@/app/w/Lightbox";
 
 type Mode = "live" | "preview";
 
@@ -64,6 +65,7 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", sl
         <BlocksRenderer blocks={blocks} mode={mode} token={token} guest={guest} slug={slug} />
       </div>
       {mode === "live" && countdown && <InviteMotion targetIso={(countdown.data as { targetIso?: string }).targetIso ?? ""} />}
+      {mode === "live" && <Lightbox />}
     </>
   );
 }
@@ -280,8 +282,8 @@ function renderGeneric(w: WidgetNode): React.ReactNode {
     case "text":
       return <>{str("body").split(/\n{2,}/).map((p, i) => <p key={i} className="nt">{p.split("\n").map((line, j) => <span key={j}>{j > 0 && <br />}{line}</span>)}</p>)}</>;
     case "image": {
-      const img = <img className="nimg" src={str("src")} alt={str("alt")} style={{ borderRadius: d.rounded ? 3 : undefined }} loading="lazy" />;
       const href = str("href");
+      const img = <img className="nimg" src={str("src")} alt={str("alt")} style={{ borderRadius: d.rounded ? 3 : undefined }} loading="lazy" data-full={href ? undefined : str("src")} />;
       return href ? <a href={href} target="_blank" rel="noreferrer">{img}</a> : img;
     }
     case "button":
@@ -524,8 +526,8 @@ function SectionView({ s, mode, token, guest, slug }: { s: Section; mode: Mode; 
           <div className={rk(mode, "label")}>{s.label}</div>
           <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
           <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
-          <div className={rk(mode, "gallery-grid", "d2")}>
-            {s.images.map((img, i) => (<div key={i} className="gal-item" style={{ backgroundImage: `url('${img}')` }} />))}
+          <div className={rk(mode, "gallery-grid", "d2")} data-gallery={s.id}>
+            {s.images.map((img, i) => (<div key={i} className="gal-item" role="button" tabIndex={0} data-full={img} style={{ backgroundImage: `url('${img}')` }} />))}
           </div>
         </div></section>
       );
@@ -572,7 +574,17 @@ function SectionView({ s, mode, token, guest, slug }: { s: Section; mode: Mode; 
           <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
           <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
           {s.lead && <div className={rk(mode, "lead", "d1")} style={{ fontSize: "1.14rem" }}>{s.lead}</div>}
-          {mode === "live" && slug ? <div className={rk(mode, "", "d2")}><CameraBlock slug={slug} prompts={s.prompts} /></div> : <AppPreview kind="camera" prompts={s.prompts} />}
+          {mode === "live" && slug ? <div className={rk(mode, "", "d2")}><CameraBlock slug={slug} shots={s.shots ?? 24} /></div> : <AppPreview kind="camera" />}
+        </div></section>
+      );
+    case "scavenger":
+      return (
+        <section className="sep-top"><div className="wrap">
+          {s.label && <div className={rk(mode, "label")}>{s.label}</div>}
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          {s.lead && <div className={rk(mode, "lead", "d1")} style={{ fontSize: "1.14rem" }}>{s.lead}</div>}
+          {mode === "live" && slug ? <div className={rk(mode, "", "d2")}><ScavengerBlock slug={slug} prompts={s.prompts} /></div> : <AppPreview kind="scavenger" prompts={s.prompts} />}
         </div></section>
       );
     case "guestbook":
@@ -600,12 +612,21 @@ function SectionView({ s, mode, token, guest, slug }: { s: Section; mode: Mode; 
 
 // Static stand-in for the interactive wedding-day blocks, shown in the builder
 // preview (where there's no slug / live data).
-function AppPreview({ kind, prompts }: { kind: "camera" | "guestbook" | "songs"; prompts?: string[] }) {
+function AppPreview({ kind, prompts }: { kind: "camera" | "scavenger" | "guestbook" | "songs"; prompts?: string[] }) {
   if (kind === "camera") return (
     <div className="wd-camera">
-      {prompts?.[0] && <div className="wd-prompt"><span className="wd-prompt-eyebrow">Photo challenge</span><span className="wd-prompt-text">{prompts[0]}</span></div>}
-      <div className="wd-cam-controls"><div className="wd-input wd-ph" /><button type="button" className="wd-shutter">📷 Take a photo</button></div>
+      <div className="wd-cam-controls"><div className="wd-film"><span className="wd-film-count">24</span><span className="wd-film-label">shots left</span></div><div className="wd-input wd-ph" /><button type="button" className="wd-shutter">📷 Take a photo</button></div>
       <p className="wd-empty">Guests’ photos appear here on the day.</p>
+    </div>
+  );
+  if (kind === "scavenger") return (
+    <div className="wd-hunt">
+      <p className="wd-hunt-progress">0 of {prompts?.length ?? 0} captured</p>
+      <div className="wd-hunt-list">
+        {(prompts ?? ["A candid of the couple", "Someone on the dance floor"]).slice(0, 4).map((p, i) => (
+          <div key={i} className="wd-hunt-item"><div className="wd-hunt-head"><span className="wd-hunt-check">{i + 1}</span><span className="wd-hunt-text">{p}</span><button type="button" className="wd-hunt-btn">📷</button></div></div>
+        ))}
+      </div>
     </div>
   );
   if (kind === "guestbook") return (

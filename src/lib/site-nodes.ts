@@ -85,6 +85,7 @@ export const WIDGET_META: Record<WidgetKind, { label: string; icon: string; gene
   gifts: { label: "Gifts", icon: "❦", generic: false },
   richText: { label: "Text block", icon: "¶", generic: false },
   camera: { label: "Disposable camera", icon: "📷", generic: false },
+  scavenger: { label: "Scavenger hunt", icon: "🔍", generic: false },
   guestbook: { label: "Guestbook", icon: "✍", generic: false },
   songs: { label: "Song requests", icon: "♫", generic: false },
 };

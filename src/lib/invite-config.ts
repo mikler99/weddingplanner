@@ -25,7 +25,7 @@ export type GiftLink = { label: string; url: string };
 export type SectionType =
   | "hero" | "story" | "photoBand" | "details" | "countdown" | "rsvp" | "footer"
   | "schedule" | "faq" | "gallery" | "party" | "gifts" | "richText"
-  | "camera" | "guestbook" | "songs";
+  | "camera" | "scavenger" | "guestbook" | "songs";
 
 export type Section =
   | { id: string; type: "hero"; visible: boolean; garland: string; label: string; name1: string; name2: string; date: string; venue: string; bgImage: string }
@@ -41,7 +41,8 @@ export type Section =
   | { id: string; type: "party"; visible: boolean; label: string; heading: string; members: PartyMember[] }
   | { id: string; type: "gifts"; visible: boolean; label: string; heading: string; message: string; links: GiftLink[] }
   | { id: string; type: "richText"; visible: boolean; label: string; heading: string; body: string }
-  | { id: string; type: "camera"; visible: boolean; label: string; heading: string; lead: string; prompts: string[] }
+  | { id: string; type: "camera"; visible: boolean; label: string; heading: string; lead: string; shots: number }
+  | { id: string; type: "scavenger"; visible: boolean; label: string; heading: string; lead: string; prompts: string[] }
   | { id: string; type: "guestbook"; visible: boolean; label: string; heading: string; lead: string }
   | { id: string; type: "songs"; visible: boolean; label: string; heading: string; lead: string };
 
@@ -61,7 +62,8 @@ export const SECTION_META: Record<SectionType, { label: string; hint: string }> 
   party: { label: "Wedding party", hint: "The lineup" },
   gifts: { label: "Gifts", hint: "A note on gifts / contributions" },
   richText: { label: "Text block", hint: "A heading + paragraph" },
-  camera: { label: "Disposable camera", hint: "Guests snap & share photos live" },
+  camera: { label: "Disposable camera", hint: "Free shots (limited) to a shared gallery" },
+  scavenger: { label: "Scavenger hunt", hint: "Photo challenges for guests" },
   guestbook: { label: "Guestbook", hint: "Well-wishes from your guests" },
   songs: { label: "Song requests", hint: "Guests suggest songs for the DJ" },
 };
@@ -140,7 +142,8 @@ export function newSection(type: SectionType, seed: number): Section {
     case "party": return { id, type, visible: true, label: "By our side", heading: "Wedding Party", members: [{ name: "Name", role: "Maid of Honour", photo: "" }, { name: "Name", role: "Best Man", photo: "" }] };
     case "gifts": return { id, type, visible: true, label: "Your presence", heading: "Gifts", message: "Your company is the only gift we need. If you’d still like to help us celebrate, a card table will be set up at the reception.", links: [] };
     case "richText": return { id, type, visible: true, label: "", heading: "A heading", body: "Write anything you like here." };
-    case "camera": return { id, type, visible: true, label: "Say cheese", heading: "Disposable Camera", lead: "Be our photographer for the day. Snap a moment, add your name, and it lands in our shared gallery for everyone to see.", prompts: ["A candid of the couple", "Your table, all together", "Someone on the dance floor", "The happiest face you can find", "A detail you love about today", "A selfie with someone you just met"] };
+    case "camera": return { id, type, visible: true, label: "Say cheese", heading: "Disposable Camera", lead: "Be our photographer for the day. You've got a limited roll of film — make every shot count. Everything lands in our shared gallery for all to see.", shots: 24 };
+    case "scavenger": return { id, type, visible: true, label: "Photo hunt", heading: "Scavenger Hunt", lead: "Can you capture them all? Snap a photo for each challenge below.", prompts: ["A candid of the couple", "Your table, all together", "Someone on the dance floor", "The happiest face you can find", "A detail you love about today", "A selfie with someone you just met"] };
     case "guestbook": return { id, type, visible: true, label: "Leave your mark", heading: "Guestbook", lead: "Share a wish, a memory, or a little advice for the newlyweds." };
     case "songs": return { id, type, visible: true, label: "Fill the floor", heading: "Song Requests", lead: "What will get you dancing? Send it to the DJ." };
   }

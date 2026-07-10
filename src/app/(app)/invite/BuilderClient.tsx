@@ -12,7 +12,7 @@ import {
 } from "@/lib/site-nodes";
 import { saveInviteConfig } from "./actions";
 
-const WEDDING_PALETTE: WidgetKind[] = ["hero", "story", "photoBand", "details", "schedule", "gallery", "party", "countdown", "faq", "gifts", "camera", "guestbook", "songs", "rsvp", "footer"];
+const WEDDING_PALETTE: WidgetKind[] = ["hero", "story", "photoBand", "details", "schedule", "gallery", "party", "countdown", "faq", "gifts", "camera", "scavenger", "guestbook", "songs", "rsvp", "footer"];
 
 // Give every page a block tree up front (legacy pages get wrapped once), so all
 // editing operates on `blocks` and the preview renders the in-progress tree.
@@ -575,8 +575,15 @@ function SectionInspector({ section, weddingId, onChange }: { section: Section; 
         <Text label="Small label" value={s.label} onChange={(v) => P({ label: v } as Partial<Section>)} />
         <Text label="Heading" value={s.heading} onChange={(v) => P({ heading: v } as Partial<Section>)} />
         <Area label="Message" value={s.lead} onChange={(v) => P({ lead: v } as Partial<Section>)} />
-        <Repeater<{ text: string }> label="Photo challenges (optional)" items={s.prompts.map((text) => ({ text }))} empty={{ text: "" }} onChange={(items) => P({ prompts: items.map((i) => i.text) } as Partial<Section>)} render={(it, set) => (<Text label="Prompt" value={it.text} onChange={(v) => set({ text: v })} />)} />
-        <p className="mt-2 text-xs text-faint">On the live site, guests snap photos into a shared gallery. A random challenge is shown each time.</p>
+        <Num label="Shots per guest (0 = unlimited)" value={s.shots ?? 24} min={0} max={200} onChange={(v) => P({ shots: v } as Partial<Section>)} />
+        <p className="mt-2 text-xs text-faint">Guests shoot freely into a shared gallery, limited to this many photos each (the disposable-camera feel). For photo challenges, add a separate <strong>Scavenger hunt</strong> block.</p>
+      </>)}
+      {s.type === "scavenger" && (<>
+        <Text label="Small label" value={s.label} onChange={(v) => P({ label: v } as Partial<Section>)} />
+        <Text label="Heading" value={s.heading} onChange={(v) => P({ heading: v } as Partial<Section>)} />
+        <Area label="Message" value={s.lead} onChange={(v) => P({ lead: v } as Partial<Section>)} />
+        <Repeater<{ text: string }> label="Challenges" items={s.prompts.map((text) => ({ text }))} empty={{ text: "" }} onChange={(items) => P({ prompts: items.map((i) => i.text) } as Partial<Section>)} render={(it, set) => (<Text label="Prompt" value={it.text} onChange={(v) => set({ text: v })} />)} />
+        <p className="mt-2 text-xs text-faint">Each challenge is a photo prompt guests can capture. Photos appear under the challenge and in your gallery.</p>
       </>)}
       {(s.type === "guestbook" || s.type === "songs") && (<>
         <Text label="Small label" value={s.label} onChange={(v) => P({ label: v } as Partial<Section>)} />

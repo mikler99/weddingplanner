@@ -27,22 +27,63 @@ function relTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-// --- Disposable camera -------------------------------------------------------
-export function CameraBlock({ slug, prompts }: { slug: string; prompts: string[] }) {
+// Shared upload flow: signed URL → direct upload → record row. Used by both the
+// free camera and the scavenger hunt.
+async function uploadGuestPhoto(slug: string, file: File, opts: { name?: string; caption?: string; prompt?: string }): Promise<{ ok: boolean; error?: string }> {
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const up = await createPhotoUpload(slug, ext);
+  if (!up.ok || !up.path || !up.token) return { ok: false, error: up.error || "Upload failed" };
+  const sb = createClient();
+  const { error } = await sb.storage.from("wedding-photos").uploadToSignedUrl(up.path, up.token, file);
+  if (error) return { ok: false, error: "Upload failed" };
+  const rec = await addPhoto({ slug, path: up.path, uploaderName: opts.name, caption: opts.caption, prompt: opts.prompt });
+  return rec.ok ? { ok: true } : { ok: false, error: rec.error || "Could not save" };
+}
+
+// A guest's personal roll of film, counted in localStorage (playful/soft — the
+// "disposable" feel, not a hard server limit since guests are anonymous).
+function useShotCount(slug: string): [number, () => void] {
+  const key = `wed_shots_${slug}`;
+  const [used, setUsed] = useState(0);
+  useEffect(() => { try { setUsed(Number(localStorage.getItem(key) || "0")); } catch {} }, [key]);
+  const spend = () => setUsed((u) => { const n = u + 1; try { localStorage.setItem(key, String(n)); } catch {} return n; });
+  return [used, spend];
+}
+
+// A grid of photos with lightbox (data-full / data-gallery are read by <Lightbox>).
+function PhotoGrid({ photos, groupId }: { photos: PhotoItem[]; groupId: string }) {
+  return (
+    <div className="wd-gallery" data-gallery={groupId}>
+      {photos.map((p) => (
+        <figure key={p.id} className="wd-shot">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={p.url} alt={p.caption || "Guest photo"} loading="lazy" data-full={p.url} />
+          {(p.caption || p.uploaderName) && (
+            <figcaption>{p.caption}{p.uploaderName ? <span className="wd-by"> — {p.uploaderName}</span> : null}</figcaption>
+          )}
+        </figure>
+      ))}
+    </div>
+  );
+}
+
+// --- Disposable camera (free shooting, limited shots) ------------------------
+export function CameraBlock({ slug, shots }: { slug: string; shots: number }) {
   const [name, setName] = useGuestName();
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
-  const [promptIdx, setPromptIdx] = useState(0);
+  const [used, spend] = useShotCount(slug);
   const fileRef = useRef<HTMLInputElement>(null);
   const caption = useRef<HTMLInputElement>(null);
 
+  const limit = shots > 0 ? shots : Infinity;
+  const remaining = limit - used;
+  const outOfFilm = remaining <= 0;
+
   const load = () => { getPhotos(slug).then(setPhotos).catch(() => {}); };
   useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [slug]);
-
-  const prompt = prompts.length ? prompts[promptIdx % prompts.length] : "";
-  const shuffle = () => setPromptIdx((i) => i + 1);
 
   const qr = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -51,19 +92,13 @@ export function CameraBlock({ slug, prompts }: { slug: string; prompts: string[]
 
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || outOfFilm) return;
     setErr(null); setBusy(true);
     try {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const up = await createPhotoUpload(slug, ext);
-      if (!up.ok || !up.path || !up.token) throw new Error(up.error || "Upload failed");
-      const sb = createClient();
-      const { error } = await sb.storage.from("wedding-photos").uploadToSignedUrl(up.path, up.token, file);
-      if (error) throw new Error("Upload failed");
-      const rec = await addPhoto({ slug, path: up.path, uploaderName: name, caption: caption.current?.value, prompt });
-      if (!rec.ok) throw new Error(rec.error || "Could not save");
+      const r = await uploadGuestPhoto(slug, file, { name, caption: caption.current?.value });
+      if (!r.ok) throw new Error(r.error);
       if (caption.current) caption.current.value = "";
-      shuffle();
+      spend();
       load();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Something went wrong.");
@@ -75,20 +110,22 @@ export function CameraBlock({ slug, prompts }: { slug: string; prompts: string[]
 
   return (
     <div className="wd-camera">
-      {prompt && (
-        <div className="wd-prompt">
-          <span className="wd-prompt-eyebrow">Photo challenge</span>
-          <span className="wd-prompt-text">{prompt}</span>
-          <button type="button" className="wd-shuffle" onClick={shuffle} aria-label="Next challenge">↻</button>
-        </div>
-      )}
       <div className="wd-cam-controls">
-        <input className="wd-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (so we know who to thank)" />
-        <input className="wd-input" ref={caption} type="text" placeholder="Add a caption (optional)" />
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
-        <button type="button" className="wd-shutter" disabled={busy} onClick={() => fileRef.current?.click()}>
-          {busy ? "Adding…" : "📷 Take a photo"}
-        </button>
+        {Number.isFinite(limit) && (
+          <div className={`wd-film ${outOfFilm ? "empty" : ""}`}>
+            <span className="wd-film-count">{Math.max(0, remaining)}</span>
+            <span className="wd-film-label">{outOfFilm ? "🎞️ Out of film" : `shot${remaining === 1 ? "" : "s"} left`}</span>
+          </div>
+        )}
+        {!outOfFilm && <>
+          <input className="wd-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (so we know who to thank)" />
+          <input className="wd-input" ref={caption} type="text" placeholder="Add a caption (optional)" />
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
+          <button type="button" className="wd-shutter" disabled={busy} onClick={() => fileRef.current?.click()}>
+            {busy ? "Adding…" : "📷 Take a photo"}
+          </button>
+        </>}
+        {outOfFilm && <p className="wd-empty" style={{ marginTop: 0 }}>Your roll is used up — thank you for capturing the day! Your photos are in the gallery below.</p>}
         {err && <p className="wd-err">{err}</p>}
         {qr && (
           <button type="button" className="wd-qr-toggle" onClick={() => setShowQr((v) => !v)}>
@@ -100,21 +137,67 @@ export function CameraBlock({ slug, prompts }: { slug: string; prompts: string[]
         )}
       </div>
 
-      {photos.length > 0 ? (
-        <div className="wd-gallery">
-          {photos.map((p) => (
-            <figure key={p.id} className="wd-shot">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.url} alt={p.caption || "Guest photo"} loading="lazy" />
-              {(p.caption || p.uploaderName) && (
-                <figcaption>{p.caption}{p.uploaderName ? <span className="wd-by"> — {p.uploaderName}</span> : null}</figcaption>
-              )}
-            </figure>
-          ))}
-        </div>
-      ) : (
-        <p className="wd-empty">Be the first to add a photo ✨</p>
-      )}
+      {photos.length > 0 ? <PhotoGrid photos={photos} groupId={`cam-${slug}`} /> : <p className="wd-empty">Be the first to add a photo ✨</p>}
+    </div>
+  );
+}
+
+// --- Photo scavenger hunt ----------------------------------------------------
+export function ScavengerBlock({ slug, prompts }: { slug: string; prompts: string[] }) {
+  const [name] = useGuestName();
+  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  const [busyPrompt, setBusyPrompt] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState<string[]>([]);
+  const activePrompt = useRef<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const doneKey = `wed_hunt_${slug}`;
+
+  const load = () => { getPhotos(slug).then(setPhotos).catch(() => {}); };
+  useEffect(() => { load(); const t = setInterval(load, 20000); return () => clearInterval(t); }, [slug]);
+  useEffect(() => { try { setDone(JSON.parse(localStorage.getItem(doneKey) || "[]")); } catch {} }, [doneKey]);
+
+  const markDone = (p: string) => setDone((d) => { const n = d.includes(p) ? d : [...d, p]; try { localStorage.setItem(doneKey, JSON.stringify(n)); } catch {} return n; });
+
+  const capture = (prompt: string) => { activePrompt.current = prompt; fileRef.current?.click(); };
+  const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]; const prompt = activePrompt.current;
+    if (!file || !prompt) return;
+    setErr(null); setBusyPrompt(prompt);
+    try {
+      const r = await uploadGuestPhoto(slug, file, { name, prompt });
+      if (!r.ok) throw new Error(r.error);
+      markDone(prompt); load();
+    } catch (e2) {
+      setErr(e2 instanceof Error ? e2.message : "Something went wrong.");
+    } finally {
+      setBusyPrompt(null); activePrompt.current = null;
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const completed = done.length;
+  return (
+    <div className="wd-hunt">
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
+      {prompts.length > 0 && <p className="wd-hunt-progress">{completed} of {prompts.length} captured</p>}
+      {err && <p className="wd-err" style={{ textAlign: "center" }}>{err}</p>}
+      <div className="wd-hunt-list">
+        {prompts.map((p, i) => {
+          const shots = photos.filter((ph) => ph.prompt === p);
+          const isDone = done.includes(p) || shots.length > 0;
+          return (
+            <div key={i} className={`wd-hunt-item ${isDone ? "done" : ""}`}>
+              <div className="wd-hunt-head">
+                <span className="wd-hunt-check">{isDone ? "✓" : i + 1}</span>
+                <span className="wd-hunt-text">{p}</span>
+                <button type="button" className="wd-hunt-btn" disabled={busyPrompt === p} onClick={() => capture(p)}>{busyPrompt === p ? "…" : shots.length ? "＋" : "📷"}</button>
+              </div>
+              {shots.length > 0 && <PhotoGrid photos={shots} groupId={`hunt-${slug}-${i}`} />}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

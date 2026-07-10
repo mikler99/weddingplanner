@@ -62,7 +62,7 @@ export function newPage(key: PageTemplateKey, seed: number): SitePage {
     case "gallery": return { id, slug: "gallery", title: "Gallery", showInNav: true, sections: [s("gallery")] };
     case "party": return { id, slug: "party", title: "Wedding Party", showInNav: true, sections: [s("party")] };
     case "rsvp": return { id, slug: "rsvp", title: "RSVP", showInNav: true, sections: [s("rsvp")] };
-    case "weddingday": return { id, slug: "wedding-day", title: "Wedding Day", showInNav: true, sections: [s("camera"), s("guestbook"), s("songs")] };
+    case "weddingday": return { id, slug: "wedding-day", title: "Wedding Day", showInNav: true, sections: [s("camera"), s("scavenger"), s("guestbook"), s("songs")] };
     case "custom": return { id, slug: `page-${seed}`, title: "New page", showInNav: true, sections: [s("richText")] };
   }
 }

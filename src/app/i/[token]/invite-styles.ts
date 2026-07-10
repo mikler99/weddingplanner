@@ -245,4 +245,37 @@ export const INVITE_CSS = `
   .invite .nh{font-size:var(--w-fsm,var(--w-fs,1.7rem))}
   .invite .nt{font-size:var(--w-fsm,var(--w-fs,1.08rem))}
 }
+
+/* Disposable-camera film counter */
+.invite .wd-film{display:flex;align-items:baseline;justify-content:center;gap:8px;margin-bottom:4px}
+.invite .wd-film-count{font-family:var(--font-display),serif;font-size:2.4rem;font-weight:600;color:var(--gold-2);line-height:1}
+.invite .wd-film.empty .wd-film-count{color:var(--ink-dim)}
+.invite .wd-film-label{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;color:var(--gold)}
+.invite .gal-item,.invite .wd-shot img,.invite .nimg[data-full]{cursor:zoom-in}
+
+/* Photo scavenger hunt */
+.invite .wd-hunt{max-width:600px;margin:24px auto 0}
+.invite .wd-hunt-progress{text-align:center;font-family:var(--font-display),serif;font-style:italic;font-size:1.14rem;color:var(--gold-2);margin:0 0 16px}
+.invite .wd-hunt-list{display:flex;flex-direction:column;gap:12px;text-align:left}
+.invite .wd-hunt-item{padding:14px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(201,168,106,.2);border-radius:4px;transition:border-color .2s}
+.invite .wd-hunt-item.done{border-color:rgba(147,172,130,.5);background:rgba(147,172,130,.08)}
+.invite .wd-hunt-head{display:flex;align-items:center;gap:12px}
+.invite .wd-hunt-check{flex:0 0 26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;border:1px solid rgba(201,168,106,.4);color:var(--gold-2);font-family:var(--font-sans),sans-serif;font-size:.8rem}
+.invite .wd-hunt-item.done .wd-hunt-check{background:var(--gold);color:#0e0a06;border-color:var(--gold)}
+.invite .wd-hunt-text{flex:1;font-family:var(--font-display),serif;font-size:1.16rem;color:var(--ink)}
+.invite .wd-hunt-btn{flex:0 0 auto;width:38px;height:38px;border-radius:50%;border:1px solid rgba(201,168,106,.4);background:rgba(255,255,255,.05);color:var(--gold-2);font-size:1rem;cursor:pointer;transition:background .2s}
+.invite .wd-hunt-btn:hover{background:var(--gold);color:#0e0a06}
+.invite .wd-hunt-item .wd-gallery{margin-top:12px}
+
+/* Lightbox (rendered as a sibling of .invite, so intentionally unscoped) */
+.lb-overlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(6,4,2,.92);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);animation:lbFade .18s ease}
+@keyframes lbFade{from{opacity:0}to{opacity:1}}
+.lb-img{max-width:92vw;max-height:88vh;object-fit:contain;border-radius:3px;box-shadow:0 30px 80px -20px rgba(0,0,0,.9)}
+.lb-close{position:fixed;top:18px;right:22px;width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#fff;font-size:1.1rem;cursor:pointer}
+.lb-close:hover{background:rgba(255,255,255,.2)}
+.lb-nav{position:fixed;top:50%;transform:translateY(-50%);width:48px;height:64px;border:0;background:rgba(255,255,255,.08);color:#fff;font-size:2rem;line-height:1;cursor:pointer;border-radius:6px}
+.lb-nav:hover{background:rgba(255,255,255,.18)}
+.lb-prev{left:18px}.lb-next{right:18px}
+.lb-count{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,.8);font:500 13px ui-sans-serif,system-ui,sans-serif;letter-spacing:.05em}
+@media(max-width:600px){.lb-nav{width:40px;height:52px;font-size:1.5rem}.lb-prev{left:6px}.lb-next{right:6px}}
 `;
