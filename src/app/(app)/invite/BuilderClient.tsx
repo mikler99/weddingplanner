@@ -1,23 +1,39 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { SiteRenderer } from "@/app/i/[token]/InviteRenderer";
-import { SECTION_META, FONT_OPTIONS, THEME_PRESETS, newSection, fontsHref, type Theme, type Section, type SectionType, type Beat, type DetailCard, type ScheduleEvent, type FaqItem, type PartyMember, type GiftLink } from "@/lib/invite-config";
+import { SiteRenderer, EditorContext, type EditorApi } from "@/app/i/[token]/InviteRenderer";
+import { SECTION_META, FONT_OPTIONS, THEME_PRESETS, fontsHref, type Theme, type Section, type Beat, type DetailCard, type ScheduleEvent, type FaqItem, type PartyMember, type GiftLink } from "@/lib/invite-config";
 import { type SiteConfig, type SitePage, PAGE_TEMPLATES, type PageTemplateKey, newPage, uniqueSlug } from "@/lib/site-config";
+import {
+  type SectionNode, type ColumnNode, type WidgetNode, type NodeStyle, type Sides, type WidgetKind,
+  WIDGET_META, GENERIC_WIDGETS, newWidget, newColumn, newSectionNode, normalizePage, widgetToSection, nid,
+} from "@/lib/site-nodes";
 import { saveInviteConfig } from "./actions";
 
-const ADDABLE: SectionType[] = ["hero", "story", "photoBand", "details", "countdown", "schedule", "gallery", "party", "faq", "gifts", "richText", "camera", "guestbook", "songs", "rsvp", "footer"];
+const WEDDING_PALETTE: WidgetKind[] = ["hero", "story", "photoBand", "details", "schedule", "gallery", "party", "countdown", "faq", "gifts", "camera", "guestbook", "songs", "rsvp", "footer"];
+
+// Give every page a block tree up front (legacy pages get wrapped once), so all
+// editing operates on `blocks` and the preview renders the in-progress tree.
+function withBlocks(site: SiteConfig): SiteConfig {
+  return { ...site, pages: site.pages.map((p) => ({ ...p, blocks: normalizePage(p) })) };
+}
+const cloneWidget = (w: WidgetNode, seed: number): WidgetNode => ({ ...w, id: nid("w", seed), data: JSON.parse(JSON.stringify(w.data)), style: w.style ? { ...w.style } : undefined });
+const cloneSection = (s: SectionNode, seed: number): SectionNode => ({ ...s, id: nid("sec", seed), columns: s.columns.map((c) => ({ ...c, id: nid("col", seed), children: c.children.map((w) => cloneWidget(w, seed)) })) });
+
+type Sel = { kind: "section" | "column" | "widget"; id: string } | { kind: "theme" } | null;
 
 export function BuilderClient({ weddingId, initial }: { weddingId: string; initial: SiteConfig }) {
-  const [site, setSite] = useState<SiteConfig>(initial);
+  const [site, setSite] = useState<SiteConfig>(() => withBlocks(initial));
   const [pageId, setPageId] = useState<string>(initial.pages[0]?.id ?? "home");
-  const [sel, setSel] = useState<string>("theme"); // "theme" | "" | sectionId
+  const [sel, setSel] = useState<Sel>({ kind: "theme" });
+  const [tab, setTab] = useState<"content" | "style" | "advanced">("content");
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
-  const [addingSection, setAddingSection] = useState(false);
   const [addingPage, setAddingPage] = useState(false);
+  const [addingSection, setAddingSection] = useState(false);
+  const [drag, setDrag] = useState<{ kind: "new" | "move"; ref: string } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const seed = useRef(Date.now() % 100000);
 
@@ -35,32 +51,106 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
   };
 
   const page = site.pages.find((p) => p.id === pageId) ?? site.pages[0];
+  const blocks = (page.blocks as SectionNode[] | undefined) ?? [];
   const setPages = (pages: SitePage[]) => commit({ ...site, pages });
   const patchPage = (id: string, patch: Partial<SitePage>) => setPages(site.pages.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  const setBlocks = (bl: SectionNode[]) => patchPage(page.id, { blocks: bl });
 
-  // --- section ops (within the selected page) ---
-  const setSections = (sections: Section[]) => patchPage(page.id, { sections });
-  const updateSection = (id: string, patch: Partial<Section>) => setSections(page.sections.map((s) => (s.id === id ? ({ ...s, ...patch } as Section) : s)));
-  const moveSection = (id: string, dir: -1 | 1) => {
-    const i = page.sections.findIndex((s) => s.id === id); const j = i + dir;
-    if (j < 0 || j >= page.sections.length) return;
-    const arr = [...page.sections]; [arr[i], arr[j]] = [arr[j], arr[i]]; setSections(arr);
+  // --- block-tree ops (on the active page) ---
+  const mapSection = (sid: string, fn: (s: SectionNode) => SectionNode) => setBlocks(blocks.map((s) => (s.id === sid ? fn(s) : s)));
+  const findWidget = (id: string): { s: SectionNode; c: ColumnNode; w: WidgetNode } | null => {
+    for (const s of blocks) for (const c of s.columns) { const w = c.children.find((x) => x.id === id); if (w) return { s, c, w }; }
+    return null;
   };
-  const removeSection = (id: string) => { setSections(page.sections.filter((s) => s.id !== id)); if (sel === id) setSel(""); };
-  const duplicateSection = (id: string) => {
-    const s = page.sections.find((x) => x.id === id); if (!s) return;
-    const copy = { ...s, id: `${s.type}-${seed.current++}` } as Section;
-    const i = page.sections.findIndex((x) => x.id === id);
-    const arr = [...page.sections]; arr.splice(i + 1, 0, copy); setSections(arr); setSel(copy.id);
+  const findColumn = (id: string): { s: SectionNode; c: ColumnNode } | null => {
+    for (const s of blocks) { const c = s.columns.find((x) => x.id === id); if (c) return { s, c }; }
+    return null;
   };
-  const addSection = (type: SectionType) => { const s = newSection(type, seed.current++); setSections([...page.sections, s]); setSel(s.id); setAddingSection(false); };
+
+  const patchWidget = (id: string, patch: Partial<WidgetNode>) =>
+    setBlocks(blocks.map((s) => ({ ...s, columns: s.columns.map((c) => ({ ...c, children: c.children.map((w) => (w.id === id ? { ...w, ...patch } : w)) })) })));
+  const patchWidgetData = (id: string, dpatch: Record<string, unknown>) => {
+    const f = findWidget(id); if (!f) return;
+    patchWidget(id, { data: { ...f.w.data, ...dpatch } });
+  };
+  const patchColumn = (id: string, patch: Partial<ColumnNode>) =>
+    setBlocks(blocks.map((s) => ({ ...s, columns: s.columns.map((c) => (c.id === id ? { ...c, ...patch } : c)) })));
+  const patchSection = (id: string, patch: Partial<SectionNode>) => mapSection(id, (s) => ({ ...s, ...patch }));
+  const patchStyle = (kind: "section" | "column" | "widget", id: string, sp: Partial<NodeStyle>) => {
+    const merge = (cur?: NodeStyle) => ({ ...cur, ...sp });
+    if (kind === "widget") patchWidget(id, { style: merge(findWidget(id)?.w.style) });
+    else if (kind === "column") patchColumn(id, { style: merge(findColumn(id)?.c.style) });
+    else patchSection(id, { style: merge(blocks.find((s) => s.id === id)?.style) });
+  };
+
+  const insertWidget = (colId: string, index: number, w: WidgetNode) => {
+    setBlocks(blocks.map((s) => ({ ...s, columns: s.columns.map((c) => (c.id === colId ? { ...c, children: [...c.children.slice(0, index), w, ...c.children.slice(index)] } : c)) })));
+  };
+  const dropNew = (widget: string, colId: string, index: number) => {
+    const w = newWidget(widget as WidgetKind, seed.current++);
+    insertWidget(colId, index, w);
+    setSel({ kind: "widget", id: w.id }); setTab("content");
+  };
+  const dropMove = (widgetId: string, colId: string, index: number) => {
+    const f = findWidget(widgetId); if (!f) return;
+    // remove, then insert (compensate index if moving down within the same column)
+    let bl = blocks.map((s) => ({ ...s, columns: s.columns.map((c) => ({ ...c, children: c.children.filter((x) => x.id !== widgetId) })) }));
+    const sameCol = f.c.id === colId;
+    const oldIndex = f.c.children.findIndex((x) => x.id === widgetId);
+    const idx = sameCol && oldIndex < index ? index - 1 : index;
+    bl = bl.map((s) => ({ ...s, columns: s.columns.map((c) => (c.id === colId ? { ...c, children: [...c.children.slice(0, idx), f.w, ...c.children.slice(idx)] } : c)) }));
+    setBlocks(bl);
+  };
+
+  const widgetCmd = (id: string, cmd: "up" | "down" | "dup" | "del") => {
+    const f = findWidget(id); if (!f) return;
+    const arr = f.c.children; const i = arr.findIndex((x) => x.id === id);
+    if (cmd === "del") { patchColumn(f.c.id, { children: arr.filter((x) => x.id !== id) }); setSel(null); return; }
+    if (cmd === "dup") { const copy = cloneWidget(f.w, seed.current++); patchColumn(f.c.id, { children: [...arr.slice(0, i + 1), copy, ...arr.slice(i + 1)] }); setSel({ kind: "widget", id: copy.id }); return; }
+    const j = cmd === "up" ? i - 1 : i + 1; if (j < 0 || j >= arr.length) return;
+    const na = [...arr]; [na[i], na[j]] = [na[j], na[i]]; patchColumn(f.c.id, { children: na });
+  };
+  const sectionCmd = (id: string, cmd: "up" | "down" | "dup" | "del") => {
+    const i = blocks.findIndex((s) => s.id === id); if (i < 0) return;
+    if (cmd === "del") { setBlocks(blocks.filter((s) => s.id !== id)); setSel(null); return; }
+    if (cmd === "dup") { const copy = cloneSection(blocks[i], seed.current++); setBlocks([...blocks.slice(0, i + 1), copy, ...blocks.slice(i + 1)]); setSel({ kind: "section", id: copy.id }); return; }
+    const j = cmd === "up" ? i - 1 : i + 1; if (j < 0 || j >= blocks.length) return;
+    const na = [...blocks]; [na[i], na[j]] = [na[j], na[i]]; setBlocks(na);
+  };
+
+  const addSection = (cols: number) => {
+    const s = cols <= 1 ? newSectionNode(seed.current++, undefined, "boxed")
+      : newSectionNode(seed.current++, Array.from({ length: cols }, () => newColumn(seed.current++, Math.round(12 / cols))), "boxed");
+    setBlocks([...blocks, s]); setSel({ kind: "section", id: s.id }); setTab("content"); setAddingSection(false);
+  };
+
+  // Add a widget from the palette to a sensible target (near the selection).
+  const addWidget = (kind: WidgetKind) => {
+    let target: { colId: string; index: number } | null = null;
+    if (sel && "id" in sel) {
+      if (sel.kind === "widget") { const f = findWidget(sel.id); if (f) target = { colId: f.c.id, index: f.c.children.findIndex((x) => x.id === sel.id) + 1 }; }
+      else if (sel.kind === "column") { const f = findColumn(sel.id); if (f) target = { colId: f.c.id, index: f.c.children.length }; }
+      else { const s = blocks.find((x) => x.id === sel.id); if (s?.columns[0]) target = { colId: s.columns[0].id, index: s.columns[0].children.length }; }
+    }
+    if (!target) {
+      const last = blocks[blocks.length - 1];
+      if (last?.columns[0]) target = { colId: last.columns[0].id, index: last.columns[0].children.length };
+    }
+    if (!target) { // no sections yet — make one, then add
+      const col = newColumn(seed.current++); const s = newSectionNode(seed.current++, [col], "boxed");
+      const w = newWidget(kind, seed.current++); col.children.push(w);
+      setBlocks([...blocks, s]); setSel({ kind: "widget", id: w.id }); setTab("content"); return;
+    }
+    dropNew(kind, target.colId, target.index);
+  };
 
   // --- page ops ---
   const addPage = (key: PageTemplateKey) => {
     const p = newPage(key, seed.current++);
     p.slug = uniqueSlug(p.slug, site.pages.map((x) => x.slug));
+    (p as SitePage & { blocks?: SectionNode[] }).blocks = normalizePage(p);
     commit({ ...site, pages: [...site.pages, p] });
-    setPageId(p.id); setSel(p.sections[0]?.id ?? ""); setAddingPage(false);
+    setPageId(p.id); setSel(null); setAddingPage(false);
   };
   const movePage = (id: string, dir: -1 | 1) => {
     const i = site.pages.findIndex((p) => p.id === id); const j = i + dir;
@@ -71,28 +161,32 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
     if (site.pages.length <= 1) return;
     const arr = site.pages.filter((p) => p.id !== id);
     commit({ ...site, pages: arr });
-    if (pageId === id) { setPageId(arr[0].id); setSel(""); }
+    if (pageId === id) { setPageId(arr[0].id); setSel(null); }
   };
 
   const setTheme = (patch: Partial<Theme>) => commit({ ...site, theme: { ...site.theme, ...patch } });
   const applyPreset = (theme: Theme) => commit({ ...site, theme });
   const saveTheme = () => {
     const name = prompt("Name this theme"); if (!name) return;
-    const nt = { id: `theme-${seed.current++}`, name, theme: site.theme };
-    commit({ ...site, savedThemes: [...(site.savedThemes ?? []), nt] });
+    commit({ ...site, savedThemes: [...(site.savedThemes ?? []), { id: `theme-${seed.current++}`, name, theme: site.theme }] });
   };
 
-  const selected = page.sections.find((s) => s.id === sel);
+  const editor: EditorApi = useMemo(() => ({
+    selId: sel && "id" in sel ? sel.id : null,
+    select: (id) => { const f = findWidget(id); if (f) { setSel({ kind: "widget", id }); setTab("content"); return; } if (findColumn(id)) { setSel({ kind: "column", id }); setTab("content"); return; } setSel({ kind: "section", id }); setTab("content"); },
+    widgetCmd, sectionCmd, dropNew, dropMove, drag, setDrag,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [sel, drag, blocks]);
 
   return (
     <div className="flex flex-col lg:h-screen lg:flex-row">
-      {/* LEFT — pages + sections */}
+      {/* LEFT — pages + element palette */}
       <aside className="flex max-h-[45vh] w-full flex-none flex-col overflow-y-auto border-b border-line bg-surface lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
           <span className="text-sm font-semibold">Website</span>
           <span className="text-[11px] text-faint">{status === "saving" ? "Saving…" : status === "saved" ? "Saved ✓" : ""}</span>
         </div>
-        <button onClick={() => setSel("theme")} className={`border-b border-line px-3 py-2 text-left text-sm ${sel === "theme" ? "bg-accent-weak font-semibold text-accent" : "hover:bg-surface-2"}`}>🎨 Theme &amp; fonts</button>
+        <button onClick={() => setSel({ kind: "theme" })} className={`border-b border-line px-3 py-2 text-left text-sm ${sel?.kind === "theme" ? "bg-accent-weak font-semibold text-accent" : "hover:bg-surface-2"}`}>🎨 Theme &amp; fonts</button>
 
         {/* Pages */}
         <div className="border-b border-line px-3 py-1.5">
@@ -103,7 +197,7 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
                 <button onClick={() => movePage(p.id, -1)} disabled={i === 0} className="h-2.5 leading-none text-faint hover:text-ink disabled:opacity-30">▲</button>
                 <button onClick={() => movePage(p.id, 1)} disabled={i === site.pages.length - 1} className="h-2.5 leading-none text-faint hover:text-ink disabled:opacity-30">▼</button>
               </div>
-              <button onClick={() => { setPageId(p.id); setSel(p.sections[0]?.id ?? ""); }} className="min-w-0 flex-1 text-left"><span className={`block truncate text-sm ${p.id === pageId ? "font-semibold text-accent" : ""}`}>{p.title}</span></button>
+              <button onClick={() => { setPageId(p.id); setSel(null); }} className="min-w-0 flex-1 text-left"><span className={`block truncate text-sm ${p.id === pageId ? "font-semibold text-accent" : ""}`}>{p.title}</span></button>
               <button onClick={() => patchPage(p.id, { showInNav: !p.showInNav })} title={p.showInNav ? "In nav" : "Hidden from nav"} className="text-[11px] opacity-0 transition group-hover:opacity-100">{p.showInNav ? "👁" : "🚫"}</button>
               {site.pages.length > 1 && <button onClick={() => confirm(`Delete page "${p.title}"?`) && removePage(p.id)} className="text-[11px] text-faint opacity-0 transition hover:text-bad group-hover:opacity-100">✕</button>}
             </div>
@@ -118,38 +212,38 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
           </div>
         </div>
 
-        {/* Sections of the selected page */}
+        {/* Page title + add-section */}
         <div className="px-3 py-1.5">
-          <label className="mb-1 block">
-            <span className="text-[10px] font-bold uppercase tracking-wide text-faint">“{page.title}” sections</span>
+          <label className="mb-2 block">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-faint">Editing page</span>
             <input value={page.title} onChange={(e) => patchPage(page.id, { title: e.target.value })} className="mt-1 w-full rounded-md border border-line bg-surface px-2 py-1 text-xs" placeholder="Page title" />
           </label>
-        </div>
-        <div className="flex-1 px-1 pb-1">
-          {page.sections.map((s, i) => (
-            <div key={s.id} className={`group flex items-center gap-1 rounded px-2 py-1.5 ${sel === s.id ? "bg-accent-weak" : "hover:bg-surface-2"}`}>
-              <div className="flex flex-col">
-                <button onClick={() => moveSection(s.id, -1)} disabled={i === 0} className="h-3 leading-none text-faint hover:text-ink disabled:opacity-30">▲</button>
-                <button onClick={() => moveSection(s.id, 1)} disabled={i === page.sections.length - 1} className="h-3 leading-none text-faint hover:text-ink disabled:opacity-30">▼</button>
-              </div>
-              <button onClick={() => setSel(s.id)} className="min-w-0 flex-1 text-left"><span className={`block truncate text-sm ${sel === s.id ? "font-semibold text-accent" : ""} ${!s.visible ? "text-faint line-through" : ""}`}>{SECTION_META[s.type].label}</span></button>
-              <button onClick={() => updateSection(s.id, { visible: !s.visible } as Partial<Section>)} className="text-xs opacity-0 transition group-hover:opacity-100">{s.visible ? "👁" : "🚫"}</button>
-              <button onClick={() => duplicateSection(s.id)} className="text-xs opacity-0 transition group-hover:opacity-100">⧉</button>
-              <button onClick={() => removeSection(s.id)} className="text-xs text-faint opacity-0 transition hover:text-bad group-hover:opacity-100">✕</button>
-            </div>
-          ))}
-          <div className="relative p-1">
-            <button onClick={() => setAddingSection((a) => !a)} className="w-full rounded-lg border border-dashed border-line py-2 text-sm text-muted hover:text-ink">+ Add section</button>
+          <div className="relative">
+            <button onClick={() => setAddingSection((a) => !a)} className="w-full rounded-lg border border-dashed border-line py-1.5 text-xs text-muted hover:text-ink">+ Add section</button>
             {addingSection && (
-              <div className="absolute bottom-12 left-1 right-1 z-10 max-h-72 overflow-y-auto rounded-lg border border-line bg-surface shadow-lg">
-                {ADDABLE.map((t) => (<button key={t} onClick={() => addSection(t)} className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-2">{SECTION_META[t].label} <span className="text-[11px] text-faint">— {SECTION_META[t].hint}</span></button>))}
+              <div className="absolute left-0 right-0 z-20 mt-1 rounded-lg border border-line bg-surface p-2 shadow-lg">
+                <p className="mb-1 text-[10px] text-faint">Columns</p>
+                <div className="flex gap-1">{[1, 2, 3, 4].map((n) => <button key={n} onClick={() => addSection(n)} className="flex-1 rounded border border-line py-1.5 text-xs hover:border-accent">{n}</button>)}</div>
               </div>
             )}
           </div>
         </div>
+
+        {/* Element palette */}
+        <div className="flex-1 px-3 pb-2">
+          <p className="mb-1.5 mt-1 text-[10px] font-bold uppercase tracking-wide text-faint">Elements</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {GENERIC_WIDGETS.map((k) => <PaletteItem key={k} kind={k} onAdd={() => addWidget(k)} setDrag={setDrag} />)}
+          </div>
+          <p className="mb-1.5 mt-3 text-[10px] font-bold uppercase tracking-wide text-faint">Wedding blocks</p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {WEDDING_PALETTE.map((k) => <PaletteItem key={k} kind={k} onAdd={() => addWidget(k)} setDrag={setDrag} />)}
+          </div>
+          <p className="mt-3 text-[10px] leading-relaxed text-faint">Click to add near your selection, or drag onto the canvas.</p>
+        </div>
       </aside>
 
-      {/* CENTER — live preview */}
+      {/* CENTER — WYSIWYG canvas */}
       <div className="flex min-h-[60vh] min-w-0 flex-1 flex-col bg-ground lg:min-h-0">
         <div className="flex items-center justify-between border-b border-line px-4 py-2">
           <div className="flex gap-1">
@@ -161,21 +255,184 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
             <Link href="/guests/send" className="text-accent hover:underline">Send links →</Link>
           </div>
         </div>
-        <div className={`preview-pane flex-1 ${device === "mobile" ? "mobile" : ""}`}>
-          <SiteRenderer site={site} pageSlug={page.slug} mode="preview" />
+        <div className={`preview-pane editing flex-1 ${device === "mobile" ? "mobile" : ""}`} onClick={() => setSel(null)}>
+          <EditorContext.Provider value={editor}>
+            <SiteRenderer site={site} pageSlug={page.slug} mode="preview" />
+          </EditorContext.Provider>
         </div>
       </div>
 
       {/* RIGHT — inspector */}
-      <aside className="w-full flex-none overflow-y-auto border-t border-line bg-surface p-4 lg:w-80 lg:border-l lg:border-t-0">
-        {sel === "theme" ? (
-          <ThemePanel theme={site.theme} savedThemes={site.savedThemes ?? []} setTheme={setTheme} applyPreset={applyPreset} saveTheme={saveTheme} />
-        ) : selected ? (
-          <SectionInspector key={selected.id} section={selected} weddingId={weddingId} onChange={(patch) => updateSection(selected.id, patch)} />
+      <aside className="w-full flex-none overflow-y-auto border-t border-line bg-surface lg:w-80 lg:border-l lg:border-t-0">
+        {sel?.kind === "theme" ? (
+          <div className="p-4"><ThemePanel theme={site.theme} savedThemes={site.savedThemes ?? []} setTheme={setTheme} applyPreset={applyPreset} saveTheme={saveTheme} /></div>
+        ) : sel && "id" in sel ? (
+          <Inspector
+            key={sel.id}
+            sel={sel}
+            blocks={blocks}
+            weddingId={weddingId}
+            tab={tab} setTab={setTab}
+            findWidget={findWidget} findColumn={findColumn}
+            patchWidgetData={patchWidgetData} patchStyle={patchStyle}
+            patchSection={patchSection} patchColumn={patchColumn}
+            widgetCmd={widgetCmd} sectionCmd={sectionCmd}
+          />
         ) : (
-          <p className="text-sm text-faint">Select a section on the left to edit it, or choose Theme &amp; fonts.</p>
+          <div className="p-4 text-sm text-faint">Click an element in the canvas to edit it, add elements from the left, or open Theme &amp; fonts.</div>
         )}
       </aside>
+    </div>
+  );
+}
+
+function PaletteItem({ kind, onAdd, setDrag }: { kind: WidgetKind; onAdd: () => void; setDrag: (d: { kind: "new" | "move"; ref: string } | null) => void }) {
+  const m = WIDGET_META[kind];
+  return (
+    <button
+      onClick={onAdd}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = "copy"; e.dataTransfer.setData("text/plain", kind); setDrag({ kind: "new", ref: kind }); }}
+      onDragEnd={() => setDrag(null)}
+      className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1.5 text-left text-xs hover:border-accent hover:bg-surface-2"
+    >
+      <span className="w-4 flex-none text-center text-[13px] text-muted">{m.icon}</span>
+      <span className="truncate">{m.label}</span>
+    </button>
+  );
+}
+
+/* -------------------------------- Inspector ------------------------------- */
+
+function Inspector(props: {
+  sel: { kind: "section" | "column" | "widget"; id: string };
+  blocks: SectionNode[]; weddingId: string;
+  tab: "content" | "style" | "advanced"; setTab: (t: "content" | "style" | "advanced") => void;
+  findWidget: (id: string) => { s: SectionNode; c: ColumnNode; w: WidgetNode } | null;
+  findColumn: (id: string) => { s: SectionNode; c: ColumnNode } | null;
+  patchWidgetData: (id: string, d: Record<string, unknown>) => void;
+  patchStyle: (kind: "section" | "column" | "widget", id: string, sp: Partial<NodeStyle>) => void;
+  patchSection: (id: string, patch: Partial<SectionNode>) => void;
+  patchColumn: (id: string, patch: Partial<ColumnNode>) => void;
+  widgetCmd: (id: string, cmd: "up" | "down" | "dup" | "del") => void;
+  sectionCmd: (id: string, cmd: "up" | "down" | "dup" | "del") => void;
+}) {
+  const { sel, blocks, weddingId, tab, setTab } = props;
+  const w = sel.kind === "widget" ? props.findWidget(sel.id)?.w : undefined;
+  const col = sel.kind === "column" ? props.findColumn(sel.id)?.c : undefined;
+  const section = sel.kind === "section" ? blocks.find((s) => s.id === sel.id) : undefined;
+  const node = w ?? col ?? section;
+  if (!node) return <div className="p-4 text-sm text-faint">Element not found.</div>;
+  const style = node.style;
+  const title = sel.kind === "widget" && w ? WIDGET_META[w.widget].label : sel.kind === "column" ? "Column" : "Section";
+  const setStyle = (sp: Partial<NodeStyle>) => props.patchStyle(sel.kind, sel.id, sp);
+
+  return (
+    <div>
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-surface px-4 py-2.5">
+        <span className="truncate text-sm font-semibold">{title}</span>
+        <div className="flex gap-1 text-xs text-faint">
+          {sel.kind === "widget" && <>
+            <button title="Duplicate" onClick={() => props.widgetCmd(sel.id, "dup")} className="hover:text-ink">⧉</button>
+            <button title="Delete" onClick={() => props.widgetCmd(sel.id, "del")} className="hover:text-bad">✕</button>
+          </>}
+          {sel.kind === "section" && <>
+            <button title="Duplicate" onClick={() => props.sectionCmd(sel.id, "dup")} className="hover:text-ink">⧉</button>
+            <button title="Delete" onClick={() => props.sectionCmd(sel.id, "del")} className="hover:text-bad">✕</button>
+          </>}
+        </div>
+      </div>
+      <div className="flex border-b border-line text-xs">
+        {(["content", "style", "advanced"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`flex-1 py-2 capitalize ${tab === t ? "border-b-2 border-accent font-semibold text-accent" : "text-muted hover:text-ink"}`}>{t}</button>
+        ))}
+      </div>
+      <div className="p-4">
+        {tab === "content" && (
+          <>
+            {sel.kind === "widget" && w && (WIDGET_META[w.widget].generic
+              ? <GenericContent w={w} weddingId={weddingId} onChange={(d) => props.patchWidgetData(sel.id, d)} />
+              : <SectionInspector section={widgetToSection(w)} weddingId={weddingId} onChange={(patch) => props.patchWidgetData(sel.id, patch as Record<string, unknown>)} />)}
+            {sel.kind === "section" && section && (
+              <div>
+                <Seg label="Width" value={section.layout} options={[["boxed", "Boxed"], ["full", "Full width"]]} onChange={(v) => props.patchSection(sel.id, { layout: v as "boxed" | "full" })} />
+                <p className="mt-3 text-xs text-faint">This section has {section.columns.length} column{section.columns.length > 1 ? "s" : ""}. Select a column to size it, or drag elements between columns on the canvas.</p>
+              </div>
+            )}
+            {sel.kind === "column" && col && (
+              <Num label={`Width (of 12)`} value={col.span} min={1} max={12} onChange={(v) => props.patchColumn(sel.id, { span: Math.max(1, Math.min(12, v)) })} />
+            )}
+          </>
+        )}
+        {tab === "style" && <StylePanel isSection={sel.kind === "section"} style={style} weddingId={weddingId} onChange={setStyle} />}
+        {tab === "advanced" && <AdvancedPanel isSection={sel.kind === "section"} style={style} onChange={setStyle} />}
+      </div>
+    </div>
+  );
+}
+
+function GenericContent({ w, weddingId, onChange }: { w: WidgetNode; weddingId: string; onChange: (d: Record<string, unknown>) => void }) {
+  const d = w.data as Record<string, unknown>;
+  const s = (k: string) => (typeof d[k] === "string" ? (d[k] as string) : "");
+  const n = (k: string, fb: number) => (typeof d[k] === "number" ? (d[k] as number) : fb);
+  switch (w.widget) {
+    case "heading": return (<><Text label="Heading text" value={s("text")} onChange={(v) => onChange({ text: v })} /><Num label="Level (1–6)" value={n("level", 2)} min={1} max={6} onChange={(v) => onChange({ level: Math.max(1, Math.min(6, v)) })} /></>);
+    case "text": return <Area label="Text" value={s("body")} onChange={(v) => onChange({ body: v })} />;
+    case "image": return (<><ImageField label="Image" value={s("src")} weddingId={weddingId} onChange={(v) => onChange({ src: v })} /><Text label="Alt text" value={s("alt")} onChange={(v) => onChange({ alt: v })} /><Text label="Link (optional)" value={s("href")} onChange={(v) => onChange({ href: v })} /><Toggle label="Rounded corners" checked={d.rounded !== false} onChange={(v) => onChange({ rounded: v })} /></>);
+    case "button": return (<><Text label="Label" value={s("label")} onChange={(v) => onChange({ label: v })} /><Text label="Link URL" value={s("href")} onChange={(v) => onChange({ href: v })} /><Seg label="Style" value={s("variant") || "solid"} options={[["solid", "Solid"], ["outline", "Outline"]]} onChange={(v) => onChange({ variant: v })} /></>);
+    case "spacer": return <Num label="Height (px)" value={n("height", 40)} min={0} max={400} onChange={(v) => onChange({ height: v })} />;
+    case "divider": return <Toggle label="Ornament (vs plain line)" checked={d.variantOrnament !== false} onChange={(v) => onChange({ variantOrnament: v })} />;
+    case "icon": return (<><Text label="Symbol / emoji" value={s("glyph")} onChange={(v) => onChange({ glyph: v })} /><Num label="Size (px)" value={n("size", 40)} min={12} max={160} onChange={(v) => onChange({ size: v })} /></>);
+    case "video": return <Text label="Video URL (YouTube, Vimeo, MP4)" value={s("url")} onChange={(v) => onChange({ url: v })} />;
+    case "map": return (<><Text label="Address or place" value={s("query")} onChange={(v) => onChange({ query: v })} /><Num label="Height (px)" value={n("height", 320)} min={140} max={700} onChange={(v) => onChange({ height: v })} /></>);
+    case "embed": return <Area label="HTML / embed code" value={s("html")} onChange={(v) => onChange({ html: v })} />;
+    default: return null;
+  }
+}
+
+function StylePanel({ isSection, style, weddingId, onChange }: { isSection: boolean; style?: NodeStyle; weddingId: string; onChange: (p: Partial<NodeStyle>) => void }) {
+  const st = style ?? {};
+  return (
+    <div>
+      <Group label="Alignment">
+        <Seg label="Text align" value={st.align ?? "left"} options={[["left", "Left"], ["center", "Center"], ["right", "Right"]]} onChange={(v) => onChange({ align: v as NodeStyle["align"] })} />
+      </Group>
+      <Group label="Spacing">
+        <SideBox label="Padding" value={st.padding} onChange={(v) => onChange({ padding: v })} />
+        <SideBox label="Margin" value={st.margin} onChange={(v) => onChange({ margin: v })} />
+        {isSection && <Num label="Content max width (px, 0 = default)" value={st.maxWidth ?? 0} min={0} max={1600} onChange={(v) => onChange({ maxWidth: v || undefined })} />}
+      </Group>
+      <Group label="Background">
+        <ColorRow label="Colour" value={st.bgColor ?? ""} onChange={(v) => onChange({ bgColor: v })} />
+        {isSection && <><ImageField label="Image" value={st.bgImage ?? ""} weddingId={weddingId} onChange={(v) => onChange({ bgImage: v })} /><ColorRow label="Overlay (rgba)" value={st.overlay ?? ""} onChange={(v) => onChange({ overlay: v })} /></>}
+      </Group>
+      <Group label="Typography">
+        <Select label="Font" value={st.fontFamily ?? ""} options={[["", "Theme default"], ["display", "Headings"], ["script", "Script"], ["sans", "Sans"]]} onChange={(v) => onChange({ fontFamily: v as NodeStyle["fontFamily"] })} />
+        <ColorRow label="Text colour" value={st.color ?? ""} onChange={(v) => onChange({ color: v })} />
+        <div className="grid grid-cols-2 gap-2"><Num label="Size (px)" value={st.fontSize ?? 0} min={0} max={140} onChange={(v) => onChange({ fontSize: v || undefined })} /><Num label="Size · mobile" value={st.fontSizeMobile ?? 0} min={0} max={140} onChange={(v) => onChange({ fontSizeMobile: v || undefined })} /></div>
+        <div className="grid grid-cols-2 gap-2"><Num label="Weight" value={st.fontWeight ?? 0} min={0} max={900} step={100} onChange={(v) => onChange({ fontWeight: v || undefined })} /><Num label="Letter-spacing" value={st.letterSpacing ?? 0} min={0} max={20} onChange={(v) => onChange({ letterSpacing: v || undefined })} /></div>
+      </Group>
+      <Group label="Border">
+        <div className="grid grid-cols-2 gap-2"><Num label="Width" value={st.borderWidth ?? 0} min={0} max={20} onChange={(v) => onChange({ borderWidth: v || undefined })} /><Num label="Radius" value={st.radius ?? 0} min={0} max={80} onChange={(v) => onChange({ radius: v || undefined })} /></div>
+        <ColorRow label="Border colour" value={st.borderColor ?? ""} onChange={(v) => onChange({ borderColor: v })} />
+        <Toggle label="Drop shadow" checked={!!st.shadow} onChange={(v) => onChange({ shadow: v })} />
+      </Group>
+    </div>
+  );
+}
+
+function AdvancedPanel({ isSection, style, onChange }: { isSection: boolean; style?: NodeStyle; onChange: (p: Partial<NodeStyle>) => void }) {
+  const st = style ?? {};
+  return (
+    <div>
+      <Group label="Animation (on the live site)">
+        <Select label="Reveal" value={st.animation ?? "none"} options={[["none", "None"], ["fade", "Fade in"], ["rise", "Rise up"], ["zoom", "Zoom in"]]} onChange={(v) => onChange({ animation: v as NodeStyle["animation"] })} />
+      </Group>
+      <Group label="Responsive visibility">
+        <Toggle label="Hide on mobile" checked={!!st.hideMobile} onChange={(v) => onChange({ hideMobile: v })} />
+        <Toggle label="Hide on desktop" checked={!!st.hideDesktop} onChange={(v) => onChange({ hideDesktop: v })} />
+      </Group>
+      {isSection && <p className="text-xs text-faint">Tip: set a mobile padding under Style → Spacing by using smaller values, and a mobile font size under Typography.</p>}
     </div>
   );
 }
@@ -403,6 +660,38 @@ function Repeater<T>({ label, items, empty, onChange, render }: { label: string;
         </div>
       ))}
       <button onClick={() => onChange([...items, empty])} className="w-full rounded-lg border border-dashed border-line py-1.5 text-xs text-muted hover:text-ink">+ Add</button>
+    </div>
+  );
+}
+
+function Num({ label, value, onChange, min, max, step }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number }) {
+  return (<label className="mb-2 block"><span className="mb-1 block text-xs text-muted">{label}</span><input type="number" value={value} min={min} max={max} step={step ?? 1} onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))} className={fieldCls} /></label>);
+}
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (<label className="mb-2 flex items-center gap-2 text-xs text-muted"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 rounded border-line" />{label}</label>);
+}
+function Select({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  return (<label className="mb-2 block"><span className="mb-1 block text-xs text-muted">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className={fieldCls}>{options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>);
+}
+function Seg({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+  return (
+    <div className="mb-2">
+      <span className="mb-1 block text-xs text-muted">{label}</span>
+      <div className="flex gap-1">
+        {options.map(([v, l]) => <button key={v} onClick={() => onChange(v)} className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${value === v ? "border-accent bg-accent-weak text-accent" : "border-line hover:bg-surface-2"}`}>{l}</button>)}
+      </div>
+    </div>
+  );
+}
+function SideBox({ label, value, onChange }: { label: string; value?: Sides; onChange: (v: Sides) => void }) {
+  const v = value ?? {};
+  const set = (k: keyof Sides, n: string) => onChange({ ...v, [k]: n === "" ? undefined : Number(n) });
+  const cell = (k: keyof Sides, ph: string) => (<input type="number" value={v[k] ?? ""} placeholder={ph} onChange={(e) => set(k, e.target.value)} className="w-full rounded-md border border-line bg-surface px-1.5 py-1 text-center text-xs" />);
+  return (
+    <div className="mb-2">
+      <span className="mb-1 block text-xs text-muted">{label} (px)</span>
+      <div className="grid grid-cols-4 gap-1">{cell("t", "T")}{cell("r", "R")}{cell("b", "B")}{cell("l", "L")}</div>
+      <div className="mt-0.5 grid grid-cols-4 gap-1 text-center text-[9px] text-faint"><span>top</span><span>right</span><span>bottom</span><span>left</span></div>
     </div>
   );
 }

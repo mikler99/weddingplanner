@@ -1,5 +1,6 @@
 "use client";
 
+import React, { createContext, useContext } from "react";
 import type { InviteConfig, Section } from "@/lib/invite-config";
 import { themeVars } from "@/lib/invite-config";
 import { pageBySlug, type SiteConfig } from "@/lib/site-config";
@@ -71,20 +72,43 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", sl
 /* Renders the block tree. Wedding widgets delegate to SectionView (unchanged);
    generic widgets render from their data + per-node style settings. */
 
+// When an EditorApi is supplied (builder canvas), the render tree grows select
+// outlines, hover toolbars and drop zones; on the public site it's null and the
+// components render plain. This keeps ONE renderer for edit + live (true WYSIWYG).
+export type NodeKind = "section" | "column" | "widget";
+export type EditorApi = {
+  selId: string | null;
+  select: (id: string) => void;
+  widgetCmd: (id: string, cmd: "up" | "down" | "dup" | "del") => void;
+  sectionCmd: (id: string, cmd: "up" | "down" | "dup" | "del") => void;
+  dropNew: (widget: string, colId: string, index: number) => void;
+  dropMove: (widgetId: string, colId: string, index: number) => void;
+  drag: { kind: "new" | "move"; ref: string } | null;
+  setDrag: (d: { kind: "new" | "move"; ref: string } | null) => void;
+};
+export const EditorContext = createContext<EditorApi | null>(null);
+
 export function BlocksRenderer({ blocks, mode, token, guest, slug }: { blocks: SectionNode[]; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
-  return <>{blocks.filter((b) => b.visible !== false).map((sec) => <SectionNodeView key={sec.id} sec={sec} mode={mode} token={token} guest={guest} slug={slug} />)}</>;
+  const ed = useContext(EditorContext);
+  const list = ed ? blocks : blocks.filter((b) => b.visible !== false);
+  return <>{list.map((sec) => <SectionNodeView key={sec.id} sec={sec} mode={mode} token={token} guest={guest} slug={slug} />)}</>;
 }
 
 function SectionNodeView({ sec, mode, token, guest, slug }: { sec: SectionNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
-  // A lone, unstyled wedding widget renders exactly as before (no wrapper).
+  const ed = useContext(EditorContext);
   const pass = isPassthrough(sec);
-  if (pass) return <WidgetView w={pass} mode={mode} token={token} guest={guest} slug={slug} />;
+  // A lone, unstyled wedding widget renders exactly as before (no wrapper);
+  // in the editor we still wrap it so the section is selectable.
+  if (pass) {
+    const body = <WidgetView w={pass} mode={mode} token={token} guest={guest} slug={slug} />;
+    return ed ? <EdBox id={sec.id} kind="section" ed={ed} label="Section" faded={sec.visible === false}>{body}</EdBox> : body;
+  }
 
   const st = sec.style;
   const secStyle: React.CSSProperties = { ...secVars(st), position: st?.overlay ? "relative" : undefined };
   if (st?.bgColor) secStyle.background = st.bgColor;
   if (st?.bgImage) { secStyle.backgroundImage = `url('${st.bgImage}')`; secStyle.backgroundSize = "cover"; secStyle.backgroundPosition = "center"; }
-  return (
+  const body = (
     <section className={`node-sec ${sec.layout === "full" ? "full" : "boxed"} ${hideClass(st)} ${animClass(st, mode)}`} style={secStyle}>
       {st?.overlay && <div className="node-overlay" style={{ background: st.overlay }} />}
       <div className="node-row" style={{ maxWidth: st?.maxWidth ? `${st.maxWidth}px` : undefined }}>
@@ -92,23 +116,84 @@ function SectionNodeView({ sec, mode, token, guest, slug }: { sec: SectionNode; 
       </div>
     </section>
   );
+  return ed ? <EdBox id={sec.id} kind="section" ed={ed} label="Section" faded={sec.visible === false}>{body}</EdBox> : body;
 }
 
 function ColumnView({ col, mode, token, guest, slug }: { col: ColumnNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
+  const ed = useContext(EditorContext);
   const style: React.CSSProperties = { flexGrow: col.span, ...widgetCss(col.style) };
+  const kids = ed ? col.children : col.children.filter((w) => w.visible !== false);
   return (
     <div className={`node-col ${hideClass(col.style)}`} style={style}>
-      {col.children.filter((w) => w.visible !== false).map((w) => <WidgetView key={w.id} w={w} mode={mode} token={token} guest={guest} slug={slug} />)}
+      {ed && <DropBar ed={ed} colId={col.id} index={0} />}
+      {kids.map((w, i) => (
+        <React.Fragment key={w.id}>
+          <WidgetView w={w} mode={mode} token={token} guest={guest} slug={slug} />
+          {ed && <DropBar ed={ed} colId={col.id} index={i + 1} />}
+        </React.Fragment>
+      ))}
+      {ed && kids.length === 0 && <div className="ed-empty-col">Drop an element here</div>}
     </div>
   );
 }
 
 function WidgetView({ w, mode, token, guest, slug }: { w: WidgetNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
+  const ed = useContext(EditorContext);
+  let body: React.ReactNode;
   if (!WIDGET_META[w.widget]?.generic) {
-    return <SectionView s={widgetToSection(w)} mode={mode} token={token} guest={guest} slug={slug} />;
+    body = <SectionView s={widgetToSection(w)} mode={mode} token={token} guest={guest} slug={slug} />;
+  } else {
+    const cls = `node-w node-${w.widget} ${hideClass(w.style)} ${animClass(w.style, mode)}`;
+    body = <div className={cls.trim()} style={{ ...widgetCss(w.style), ...widgetVars(w.style) }}>{renderGeneric(w)}</div>;
   }
-  const cls = `node-w node-${w.widget} ${hideClass(w.style)} ${animClass(w.style, mode)}`;
-  return <div className={cls.trim()} style={{ ...widgetCss(w.style), ...widgetVars(w.style) }}>{renderGeneric(w)}</div>;
+  if (!ed) return <>{body}</>;
+  return <EdBox id={w.id} kind="widget" ed={ed} label={WIDGET_META[w.widget]?.label ?? "Element"} faded={w.visible === false} draggable>{body}</EdBox>;
+}
+
+/* ---- editor chrome (only rendered when an EditorApi is present) ---- */
+
+function EdBox({ id, kind, ed, label, children, faded, draggable }: { id: string; kind: NodeKind; ed: EditorApi; label: string; children: React.ReactNode; faded?: boolean; draggable?: boolean }) {
+  const selected = ed.selId === id;
+  return (
+    <div
+      className={`ed-node ed-${kind} ${selected ? "sel" : ""} ${faded ? "faded" : ""}`}
+      data-node-id={id}
+      onClick={(e) => { e.stopPropagation(); ed.select(id); }}
+      draggable={draggable}
+      onDragStart={draggable ? (e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = "move"; ed.setDrag({ kind: "move", ref: id }); } : undefined}
+      onDragEnd={draggable ? () => ed.setDrag(null) : undefined}
+    >
+      <span className="ed-tag">{label}</span>
+      {selected && (
+        <span className="ed-tools" onClick={(e) => e.stopPropagation()}>
+          <button title="Move up" onClick={() => (kind === "widget" ? ed.widgetCmd(id, "up") : ed.sectionCmd(id, "up"))}>↑</button>
+          <button title="Move down" onClick={() => (kind === "widget" ? ed.widgetCmd(id, "down") : ed.sectionCmd(id, "down"))}>↓</button>
+          <button title="Duplicate" onClick={() => (kind === "widget" ? ed.widgetCmd(id, "dup") : ed.sectionCmd(id, "dup"))}>⧉</button>
+          <button title="Delete" onClick={() => (kind === "widget" ? ed.widgetCmd(id, "del") : ed.sectionCmd(id, "del"))}>✕</button>
+        </span>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function DropBar({ ed, colId, index }: { ed: EditorApi; colId: string; index: number }) {
+  const [over, setOver] = React.useState(false);
+  const active = !!ed.drag;
+  return (
+    <div
+      className={`ed-drop ${active ? "armed" : ""} ${over ? "over" : ""}`}
+      onDragOver={(e) => { if (ed.drag) { e.preventDefault(); e.stopPropagation(); setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault(); e.stopPropagation(); setOver(false);
+        const d = ed.drag; ed.setDrag(null);
+        if (!d) return;
+        if (d.kind === "new") ed.dropNew(d.ref, colId, index);
+        else ed.dropMove(d.ref, colId, index);
+      }}
+    />
+  );
 }
 
 function renderGeneric(w: WidgetNode): React.ReactNode {
