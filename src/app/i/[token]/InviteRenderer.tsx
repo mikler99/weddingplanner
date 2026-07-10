@@ -168,6 +168,77 @@ function SectionView({ s, mode, token, guest }: { s: Section; mode: Mode; token?
           <div className={rk(mode, "fd", "d1")}>{s.dateLine}</div>
         </footer>
       );
+    case "schedule":
+      return (
+        <section className="sep-top"><div className="wrap">
+          <div className={rk(mode, "label")}>{s.label}</div>
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          <div className={rk(mode, "timeline", "d2")}>
+            {s.events.map((e, i) => (
+              <div key={i} className="tl-item"><div className="tl-time">{e.time}</div><div className="tl-body"><h4>{e.title}</h4>{e.location && <p className="tl-loc">{e.location}</p>}{e.desc && <p>{e.desc}</p>}</div></div>
+            ))}
+          </div>
+        </div></section>
+      );
+    case "faq":
+      return (
+        <section className="sep-top"><div className="wrap">
+          <div className={rk(mode, "label")}>{s.label}</div>
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          <div className={rk(mode, "faq", "d2")}>
+            {s.items.map((it, i) => (<details key={i} className="faq-item"><summary>{it.q}</summary><p>{it.a}</p></details>))}
+          </div>
+        </div></section>
+      );
+    case "gallery":
+      return (
+        <section className="sep-top"><div className="wrap">
+          <div className={rk(mode, "label")}>{s.label}</div>
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          <div className={rk(mode, "gallery-grid", "d2")}>
+            {s.images.map((img, i) => (<div key={i} className="gal-item" style={{ backgroundImage: `url('${img}')` }} />))}
+          </div>
+        </div></section>
+      );
+    case "party":
+      return (
+        <section className="sep-top"><div className="wrap">
+          <div className={rk(mode, "label")}>{s.label}</div>
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          <div className={rk(mode, "party-grid", "d2")}>
+            {s.members.map((m, i) => (
+              <div key={i} className="party-member">{m.photo && <div className="pm-photo" style={{ backgroundImage: `url('${m.photo}')` }} />}<h4>{m.name}</h4><p>{m.role}</p></div>
+            ))}
+          </div>
+        </div></section>
+      );
+    case "gifts":
+      return (
+        <section className="sep-top"><div className="wrap">
+          <div className={rk(mode, "label")}>{s.label}</div>
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          <div className={rk(mode, "lead", "d1")}>{s.message}</div>
+          {s.links.length > 0 && (
+            <div className={rk(mode, "", "d2")} style={{ marginTop: 18, display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center" }}>
+              {s.links.map((l, i) => (<a key={i} href={l.url} target="_blank" rel="noopener" className="chip" style={{ textDecoration: "none" }}>{l.label}</a>))}
+            </div>
+          )}
+        </div></section>
+      );
+    case "richText":
+      return (
+        <section className="sep-top"><div className="wrap">
+          {s.label && <div className={rk(mode, "label")}>{s.label}</div>}
+          <h2 className={rk(mode, "h-sec", "d1")}>{s.heading}</h2>
+          <div className={rk(mode, "rule", "d1")}><span className="l" /><span className="d" /><span className="l r" /></div>
+          <div className={rk(mode, "lead", "d1")}>{s.body.split("\n").map((p, i) => (<span key={i}>{i > 0 && <br />}{p}</span>))}</div>
+        </div></section>
+      );
   }
 }
 

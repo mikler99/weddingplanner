@@ -136,4 +136,25 @@ export const INVITE_CSS = `
 .invite .site-nav a{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;color:var(--ink-soft);text-decoration:none;padding:4px 2px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s}
 .invite .site-nav a:hover{color:var(--ink)}
 .invite .site-nav a.current{color:var(--gold-2);border-color:var(--gold)}
+.invite .timeline{max-width:580px;margin:26px auto 0;text-align:left}
+.invite .tl-item{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid rgba(201,168,106,.14)}
+.invite .tl-item:last-child{border-bottom:0}
+.invite .tl-time{flex:0 0 150px;font-family:var(--font-display),serif;font-style:italic;font-size:1.1rem;color:var(--gold-2)}
+.invite .tl-body h4{font-family:var(--font-display),serif;font-weight:600;font-size:1.35rem;color:var(--ink)}
+.invite .tl-body p{font-size:1.02rem;color:var(--ink-soft)}
+.invite .tl-loc{font-style:italic}
+.invite .faq{max-width:620px;margin:22px auto 0;text-align:left}
+.invite .faq-item{border-bottom:1px solid rgba(201,168,106,.16)}
+.invite .faq-item summary{cursor:pointer;list-style:none;padding:14px 0;font-family:var(--font-display),serif;font-size:1.28rem;color:var(--ink)}
+.invite .faq-item summary::-webkit-details-marker{display:none}
+.invite .faq-item summary::after{content:"+";float:right;color:var(--gold)}
+.invite .faq-item[open] summary::after{content:"–"}
+.invite .faq-item p{padding:0 0 14px;font-size:1.05rem;line-height:1.65;color:var(--ink-soft)}
+.invite .gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:26px}
+.invite .gal-item{aspect-ratio:1;background:center/cover no-repeat;border-radius:2px;box-shadow:0 10px 24px -14px rgba(0,0,0,.7)}
+.invite .party-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:28px;margin-top:28px}
+.invite .party-member{width:150px;text-align:center}
+.invite .pm-photo{width:120px;height:120px;margin:0 auto 10px;border-radius:50%;background:center/cover no-repeat;border:1px solid rgba(201,168,106,.34)}
+.invite .party-member h4{font-family:var(--font-display),serif;font-weight:500;font-size:1.3rem;color:var(--ink)}
+.invite .party-member p{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;color:var(--gold);margin-top:2px}
 `;

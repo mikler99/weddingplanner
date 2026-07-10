@@ -17,8 +17,14 @@ export type Theme = {
 
 export type Beat = { numeral: string; title: string; text: string };
 export type DetailCard = { kind: string; title: string; lines: string; time: string; linkLabel: string; linkHref: string };
+export type ScheduleEvent = { time: string; title: string; desc: string; location: string };
+export type FaqItem = { q: string; a: string };
+export type PartyMember = { name: string; role: string; photo: string };
+export type GiftLink = { label: string; url: string };
 
-export type SectionType = "hero" | "story" | "photoBand" | "details" | "countdown" | "rsvp" | "footer";
+export type SectionType =
+  | "hero" | "story" | "photoBand" | "details" | "countdown" | "rsvp" | "footer"
+  | "schedule" | "faq" | "gallery" | "party" | "gifts" | "richText";
 
 export type Section =
   | { id: string; type: "hero"; visible: boolean; garland: string; label: string; name1: string; name2: string; date: string; venue: string; bgImage: string }
@@ -27,7 +33,13 @@ export type Section =
   | { id: string; type: "details"; visible: boolean; label: string; heading: string; lead: string; cards: DetailCard[] }
   | { id: string; type: "countdown"; visible: boolean; label: string; heading: string; targetIso: string; dressLabel: string; dressChip: string; dressText: string }
   | { id: string; type: "rsvp"; visible: boolean; label: string; heading: string; lead: string; deadline: string; bgImage: string }
-  | { id: string; type: "footer"; visible: boolean; name1: string; name2: string; dateLine: string; bouquet: string };
+  | { id: string; type: "footer"; visible: boolean; name1: string; name2: string; dateLine: string; bouquet: string }
+  | { id: string; type: "schedule"; visible: boolean; label: string; heading: string; events: ScheduleEvent[] }
+  | { id: string; type: "faq"; visible: boolean; label: string; heading: string; items: FaqItem[] }
+  | { id: string; type: "gallery"; visible: boolean; label: string; heading: string; images: string[] }
+  | { id: string; type: "party"; visible: boolean; label: string; heading: string; members: PartyMember[] }
+  | { id: string; type: "gifts"; visible: boolean; label: string; heading: string; message: string; links: GiftLink[] }
+  | { id: string; type: "richText"; visible: boolean; label: string; heading: string; body: string };
 
 export type InviteConfig = { theme: Theme; sections: Section[] };
 
@@ -39,6 +51,12 @@ export const SECTION_META: Record<SectionType, { label: string; hint: string }> 
   countdown: { label: "Countdown", hint: "Live countdown + dress code" },
   rsvp: { label: "RSVP", hint: "The reply form (guests fill this in)" },
   footer: { label: "Footer", hint: "Closing flourish" },
+  schedule: { label: "Schedule", hint: "Timeline of events" },
+  faq: { label: "FAQ", hint: "Questions & answers" },
+  gallery: { label: "Gallery", hint: "A grid of photos" },
+  party: { label: "Wedding party", hint: "The lineup" },
+  gifts: { label: "Gifts", hint: "A note on gifts / contributions" },
+  richText: { label: "Text block", hint: "A heading + paragraph" },
 };
 
 // Curated font choices (loaded from Google Fonts by name).
@@ -88,6 +106,15 @@ export const DEFAULT_INVITE: InviteConfig = {
   ],
 };
 
+// Savable starter themes (the couple can apply one, tweak it, or save their own).
+export const THEME_PRESETS: { id: string; name: string; theme: Theme }[] = [
+  { id: "golden", name: "Golden Hour", theme: DEFAULT_THEME },
+  { id: "rose", name: "Rosé", theme: { ...DEFAULT_THEME, gold: "#c98a8a", gold2: "#e2b6b6", inkSoft: "#d8c6c2" } },
+  { id: "garden", name: "Garden", theme: { ...DEFAULT_THEME, gold: "#93ac82", gold2: "#bccdae", inkSoft: "#cbccb9" } },
+  { id: "moonlight", name: "Moonlight", theme: { ...DEFAULT_THEME, ink: "#e8ecf3", inkSoft: "#b7c1d1", gold: "#9fb0c9", gold2: "#c8d3e6", bg: "#0a0d13", panel: "rgba(14,18,26,.58)" } },
+  { id: "ivory", name: "Ivory & Gold", theme: { ...DEFAULT_THEME, fontDisplay: "Playfair Display", fontScript: "Great Vibes" } },
+];
+
 // Deterministic id (no Math.random in some runtimes); good enough for section keys.
 let _n = 0;
 export function newSection(type: SectionType, seed: number): Section {
@@ -100,6 +127,12 @@ export function newSection(type: SectionType, seed: number): Section {
     case "countdown": return { id, type, visible: true, label: "Counting down", heading: "Until we celebrate", targetIso: "2027-09-25T15:30:00", dressLabel: "Dress Code", dressChip: "Cocktail", dressText: "A note on attire." };
     case "rsvp": return { id, type, visible: true, label: "Kindly reply", heading: "RSVP", lead: "Please respond by the date below.", deadline: "", bgImage: "/invite/7.jpg" };
     case "footer": return { id, type, visible: true, name1: "Name", name2: "Name", dateLine: "Month 00, 0000 · City", bouquet: "/invite/8.png" };
+    case "schedule": return { id, type, visible: true, label: "The Day", heading: "Schedule", events: [{ time: "Half past three", title: "Ceremony", desc: "", location: "" }, { time: "Five o'clock", title: "Cocktails & canapés", desc: "", location: "" }, { time: "Six thirty", title: "Dinner & dancing", desc: "", location: "" }] };
+    case "faq": return { id, type, visible: true, label: "Good to know", heading: "FAQ", items: [{ q: "Can I bring a guest?", a: "Your invitation notes how many seats you have — please check the RSVP." }, { q: "What should I wear?", a: "See the dress code on the home page." }] };
+    case "gallery": return { id, type, visible: true, label: "Us", heading: "Gallery", images: ["/invite/6.jpg"] };
+    case "party": return { id, type, visible: true, label: "By our side", heading: "Wedding Party", members: [{ name: "Name", role: "Maid of Honour", photo: "" }, { name: "Name", role: "Best Man", photo: "" }] };
+    case "gifts": return { id, type, visible: true, label: "Your presence", heading: "Gifts", message: "Your company is the only gift we need. If you’d still like to help us celebrate, a card table will be set up at the reception.", links: [] };
+    case "richText": return { id, type, visible: true, label: "", heading: "A heading", body: "Write anything you like here." };
   }
 }
 

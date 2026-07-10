@@ -1,7 +1,8 @@
 import { requireModule } from "@/lib/wedding";
 import { createClient } from "@/lib/supabase/server";
 import { INVITE_CSS } from "@/app/i/[token]/invite-styles";
-import { DEFAULT_INVITE, fontsHref, type InviteConfig } from "@/lib/invite-config";
+import { fontsHref } from "@/lib/invite-config";
+import { normalizeSite } from "@/lib/site-config";
 import { BuilderClient } from "./BuilderClient";
 
 // Contains the invite's fixed backgrounds inside the preview pane instead of the
@@ -17,15 +18,15 @@ export default async function InviteBuilderPage() {
   const { wedding_id } = await requireModule("guests");
   const supabase = await createClient();
   const { data } = await supabase.from("weddings").select("invite_config").eq("id", wedding_id).single();
-  const config = (data?.invite_config as InviteConfig | null) ?? DEFAULT_INVITE;
+  const site = normalizeSite(data?.invite_config);
 
   return (
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link id="invite-fonts" rel="stylesheet" href={fontsHref(config.theme)} />
+      <link id="invite-fonts" rel="stylesheet" href={fontsHref(site.theme)} />
       <style dangerouslySetInnerHTML={{ __html: INVITE_CSS + PREVIEW_CSS }} />
-      <BuilderClient weddingId={wedding_id} initial={config} />
+      <BuilderClient weddingId={wedding_id} initial={site} />
     </>
   );
 }
