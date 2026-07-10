@@ -102,6 +102,18 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
     setBlocks(bl);
   };
 
+  const dropSection = (payload: { kind: "new" | "move"; ref: string }, index: number) => {
+    let w: WidgetNode; let bl = blocks;
+    if (payload.kind === "new") w = newWidget(payload.ref as WidgetKind, seed.current++);
+    else { const f = findWidget(payload.ref); if (!f) return; w = f.w; bl = blocks.map((s) => ({ ...s, columns: s.columns.map((c) => ({ ...c, children: c.children.filter((x) => x.id !== payload.ref) })) })); }
+    const col = newColumn(seed.current++, 12, [w]);
+    const sec = newSectionNode(seed.current++, [col], "boxed");
+    setBlocks([...bl.slice(0, index), sec, ...bl.slice(index)]);
+    setSel({ kind: "widget", id: w.id }); setTab("content");
+  };
+  const resizeCols = (leftId: string, rightId: string, l: number, r: number) =>
+    setBlocks(blocks.map((s) => ({ ...s, columns: s.columns.map((c) => (c.id === leftId ? { ...c, span: l } : c.id === rightId ? { ...c, span: r } : c)) })));
+
   const widgetCmd = (id: string, cmd: "up" | "down" | "dup" | "del") => {
     const f = findWidget(id); if (!f) return;
     const arr = f.c.children; const i = arr.findIndex((x) => x.id === id);
@@ -174,7 +186,7 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
   const editor: EditorApi = useMemo(() => ({
     selId: sel && "id" in sel ? sel.id : null,
     select: (id) => { const f = findWidget(id); if (f) { setSel({ kind: "widget", id }); setTab("content"); return; } if (findColumn(id)) { setSel({ kind: "column", id }); setTab("content"); return; } setSel({ kind: "section", id }); setTab("content"); },
-    widgetCmd, sectionCmd, dropNew, dropMove, drag, setDrag,
+    widgetCmd, sectionCmd, dropNew, dropMove, dropSection, resizeCols, drag, setDrag,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [sel, drag, blocks]);
 
@@ -386,6 +398,15 @@ function GenericContent({ w, weddingId, onChange }: { w: WidgetNode; weddingId: 
     case "video": return <Text label="Video URL (YouTube, Vimeo, MP4)" value={s("url")} onChange={(v) => onChange({ url: v })} />;
     case "map": return (<><Text label="Address or place" value={s("query")} onChange={(v) => onChange({ query: v })} /><Num label="Height (px)" value={n("height", 320)} min={140} max={700} onChange={(v) => onChange({ height: v })} /></>);
     case "embed": return <Area label="HTML / embed code" value={s("html")} onChange={(v) => onChange({ html: v })} />;
+    case "quote": return (<><Area label="Quote" value={s("text")} onChange={(v) => onChange({ text: v })} /><Text label="Attribution (optional)" value={s("cite")} onChange={(v) => onChange({ cite: v })} /></>);
+    case "list": {
+      const items = (Array.isArray(d.items) ? (d.items as unknown[]).map(String) : []).map((text) => ({ text }));
+      return (<><Toggle label="Numbered list" checked={d.ordered === true} onChange={(v) => onChange({ ordered: v })} /><Repeater<{ text: string }> label="Items" items={items} empty={{ text: "" }} onChange={(its) => onChange({ items: its.map((i) => i.text) })} render={(it, set) => (<Text label="Item" value={it.text} onChange={(v) => set({ text: v })} />)} /></>);
+    }
+    case "socials": {
+      const links = Array.isArray(d.links) ? (d.links as { network?: string; url?: string }[]) : [];
+      return <Repeater<{ network?: string; url?: string }> label="Links" items={links} empty={{ network: "instagram", url: "" }} onChange={(ls) => onChange({ links: ls })} render={(l, set) => (<><Select label="Network" value={l.network ?? "instagram"} options={[["instagram", "Instagram"], ["facebook", "Facebook"], ["x", "X / Twitter"], ["tiktok", "TikTok"], ["youtube", "YouTube"], ["pinterest", "Pinterest"], ["spotify", "Spotify"], ["website", "Website"], ["email", "Email"]]} onChange={(v) => set({ ...l, network: v })} /><Text label="URL" value={l.url ?? ""} onChange={(v) => set({ ...l, url: v })} /></>)} />;
+    }
     default: return null;
   }
 }

@@ -225,6 +225,14 @@ export const INVITE_CSS = `
 .invite .nmap iframe{width:100%;height:100%;border:0}
 .invite .nraw{max-width:100%}
 .invite .nembed-empty{padding:28px;border:1px dashed rgba(201,168,106,.4);border-radius:4px;color:var(--ink-dim);font-family:var(--font-sans),sans-serif;font-size:.8rem;text-align:center}
+.invite .nquote{margin:0;padding:4px 0 4px 20px;border-left:2px solid var(--gold)}
+.invite .nquote p{font-family:var(--font-display),serif;font-style:italic;font-size:var(--w-fs,1.4rem);line-height:1.5;color:var(--ink)}
+.invite .nquote cite{display:block;margin-top:10px;font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;color:var(--gold);font-style:normal}
+.invite .nlist{margin:0;padding-left:1.2em;color:var(--ink-soft);font-family:var(--font-display),serif;font-size:var(--w-fs,1.14rem);line-height:1.9}
+.invite .nlist li{margin:0}
+.invite .nsocials{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.invite .nsocial{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;border:1px solid rgba(201,168,106,.4);color:var(--gold-2);font-family:var(--font-display),serif;font-size:1.1rem;text-decoration:none;transition:background .2s,color .2s}
+.invite .nsocial:hover{background:var(--gold);color:#0e0a06}
 .invite .n-fade{opacity:0;animation:nFade .9s ease forwards}
 .invite .n-zoom{opacity:0;transform:scale(.94);animation:nZoom .7s ease forwards}
 @keyframes nFade{to{opacity:1}}

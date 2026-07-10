@@ -83,6 +83,8 @@ export type EditorApi = {
   sectionCmd: (id: string, cmd: "up" | "down" | "dup" | "del") => void;
   dropNew: (widget: string, colId: string, index: number) => void;
   dropMove: (widgetId: string, colId: string, index: number) => void;
+  dropSection: (payload: { kind: "new" | "move"; ref: string }, index: number) => void;
+  resizeCols: (leftId: string, rightId: string, left: number, right: number) => void;
   drag: { kind: "new" | "move"; ref: string } | null;
   setDrag: (d: { kind: "new" | "move"; ref: string } | null) => void;
 };
@@ -90,8 +92,18 @@ export const EditorContext = createContext<EditorApi | null>(null);
 
 export function BlocksRenderer({ blocks, mode, token, guest, slug }: { blocks: SectionNode[]; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
   const ed = useContext(EditorContext);
-  const list = ed ? blocks : blocks.filter((b) => b.visible !== false);
-  return <>{list.map((sec) => <SectionNodeView key={sec.id} sec={sec} mode={mode} token={token} guest={guest} slug={slug} />)}</>;
+  if (!ed) return <>{blocks.filter((b) => b.visible !== false).map((sec) => <SectionNodeView key={sec.id} sec={sec} mode={mode} token={token} guest={guest} slug={slug} />)}</>;
+  return (
+    <>
+      <SectionDropBar ed={ed} index={0} />
+      {blocks.map((sec, i) => (
+        <React.Fragment key={sec.id}>
+          <SectionNodeView sec={sec} mode={mode} token={token} guest={guest} slug={slug} />
+          <SectionDropBar ed={ed} index={i + 1} />
+        </React.Fragment>
+      ))}
+    </>
+  );
 }
 
 function SectionNodeView({ sec, mode, token, guest, slug }: { sec: SectionNode; mode: Mode; token?: string; guest?: InviteGuest; slug?: string }) {
@@ -112,7 +124,12 @@ function SectionNodeView({ sec, mode, token, guest, slug }: { sec: SectionNode; 
     <section className={`node-sec ${sec.layout === "full" ? "full" : "boxed"} ${hideClass(st)} ${animClass(st, mode)}`} style={secStyle}>
       {st?.overlay && <div className="node-overlay" style={{ background: st.overlay }} />}
       <div className="node-row" style={{ maxWidth: st?.maxWidth ? `${st.maxWidth}px` : undefined }}>
-        {sec.columns.map((col) => <ColumnView key={col.id} col={col} mode={mode} token={token} guest={guest} slug={slug} />)}
+        {sec.columns.map((col, i) => (
+          <React.Fragment key={col.id}>
+            {ed && i > 0 && <ColResize ed={ed} left={sec.columns[i - 1]} right={col} />}
+            <ColumnView col={col} mode={mode} token={token} guest={guest} slug={slug} />
+          </React.Fragment>
+        ))}
       </div>
     </section>
   );
@@ -132,7 +149,7 @@ function ColumnView({ col, mode, token, guest, slug }: { col: ColumnNode; mode: 
           {ed && <DropBar ed={ed} colId={col.id} index={i + 1} />}
         </React.Fragment>
       ))}
-      {ed && kids.length === 0 && <div className="ed-empty-col">Drop an element here</div>}
+      {ed && kids.length === 0 && <EmptyDrop ed={ed} colId={col.id} />}
     </div>
   );
 }
@@ -196,6 +213,60 @@ function DropBar({ ed, colId, index }: { ed: EditorApi; colId: string; index: nu
   );
 }
 
+// Drop between/around sections → creates a new section from the dragged element.
+function SectionDropBar({ ed, index }: { ed: EditorApi; index: number }) {
+  const [over, setOver] = React.useState(false);
+  return (
+    <div
+      className={`ed-sdrop ${ed.drag ? "armed" : ""} ${over ? "over" : ""}`}
+      onDragOver={(e) => { if (ed.drag) { e.preventDefault(); e.stopPropagation(); setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setOver(false); const d = ed.drag; ed.setDrag(null); if (d) ed.dropSection(d, index); }}
+    />
+  );
+}
+
+function EmptyDrop({ ed, colId }: { ed: EditorApi; colId: string }) {
+  const [over, setOver] = React.useState(false);
+  return (
+    <div
+      className={`ed-empty-col ${over ? "over" : ""}`}
+      onClick={(e) => e.stopPropagation()}
+      onDragOver={(e) => { if (ed.drag) { e.preventDefault(); e.stopPropagation(); setOver(true); } }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault(); e.stopPropagation(); setOver(false);
+        const d = ed.drag; ed.setDrag(null); if (!d) return;
+        if (d.kind === "new") ed.dropNew(d.ref, colId, 0); else ed.dropMove(d.ref, colId, 0);
+      }}
+    >Drop an element here</div>
+  );
+}
+
+// Drag the divider between two columns to re-balance their 1–12 spans.
+function ColResize({ ed, left, right }: { ed: EditorApi; left: ColumnNode; right: ColumnNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const onDown = (e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const row = ref.current?.parentElement as HTMLElement | null;
+    if (!row) return;
+    const width = row.getBoundingClientRect().width || 1;
+    const startX = e.clientX;
+    const l0 = left.span, r0 = right.span, total = l0 + r0;
+    const move = (ev: PointerEvent) => {
+      const units = Math.round(((ev.clientX - startX) / width) * 12);
+      let l = l0 + units, r = r0 - units;
+      if (l < 1) { r -= 1 - l; l = 1; }
+      if (r < 1) { l -= 1 - r; r = 1; }
+      if (l + r !== total) return;
+      ed.resizeCols(left.id, right.id, l, r);
+    };
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+  return <div ref={ref} className="ed-colresize" onPointerDown={onDown} onClick={(e) => e.stopPropagation()} title="Drag to resize columns" />;
+}
+
 function renderGeneric(w: WidgetNode): React.ReactNode {
   const d = w.data as Record<string, unknown>;
   const str = (k: string, fb = "") => (typeof d[k] === "string" ? (d[k] as string) : fb);
@@ -233,9 +304,25 @@ function renderGeneric(w: WidgetNode): React.ReactNode {
     }
     case "embed":
       return str("html") ? <div className="nraw" dangerouslySetInnerHTML={{ __html: str("html") }} /> : <div className="nembed-empty">Paste embed / HTML</div>;
+    case "quote":
+      return <blockquote className="nquote"><p>{str("text")}</p>{str("cite") && <cite>{str("cite")}</cite>}</blockquote>;
+    case "list": {
+      const items = Array.isArray(d.items) ? (d.items as unknown[]).map(String) : [];
+      const ListTag = (d.ordered ? "ol" : "ul") as "ol" | "ul";
+      return <ListTag className="nlist">{items.map((it, i) => <li key={i}>{it}</li>)}</ListTag>;
+    }
+    case "socials": {
+      const links = Array.isArray(d.links) ? (d.links as { network?: string; url?: string }[]) : [];
+      return <div className="nsocials">{links.filter((l) => l.url).map((l, i) => <a key={i} href={l.url} target="_blank" rel="noreferrer" className="nsocial">{socialGlyph(l.network)}</a>)}</div>;
+    }
     default:
       return null;
   }
+}
+
+const SOCIAL_GLYPH: Record<string, string> = { instagram: "◎", facebook: "f", x: "𝕏", twitter: "𝕏", tiktok: "♪", youtube: "▶", pinterest: "P", spotify: "♫", website: "🔗", email: "✉" };
+function socialGlyph(network?: string): string {
+  return (network && SOCIAL_GLYPH[network.toLowerCase()]) || "🔗";
 }
 
 function videoEmbed(url: string): { type: "iframe" | "video"; src: string } | null {

@@ -44,7 +44,7 @@ export type NodeStyle = {
 // as a polished wedding SectionType, so it lives under the wedding blocks.
 export type GenericWidget =
   | "heading" | "text" | "image" | "button" | "spacer" | "divider"
-  | "icon" | "video" | "embed" | "map";
+  | "icon" | "video" | "embed" | "map" | "quote" | "list" | "socials";
 export type WeddingWidget = SectionType; // hero/story/rsvp/camera/gallery/… reuse Section shapes
 export type WidgetKind = GenericWidget | WeddingWidget;
 
@@ -53,7 +53,7 @@ export type ColumnNode = { id: string; type: "column"; span: number; style?: Nod
 export type SectionNode = { id: string; type: "section"; layout: "boxed" | "full"; style?: NodeStyle; visible?: boolean; columns: ColumnNode[] };
 export type Block = SectionNode;
 
-export const GENERIC_WIDGETS: GenericWidget[] = ["heading", "text", "image", "button", "video", "icon", "divider", "spacer", "embed", "map"];
+export const GENERIC_WIDGETS: GenericWidget[] = ["heading", "text", "image", "button", "quote", "list", "video", "icon", "socials", "divider", "spacer", "map", "embed"];
 
 export const WIDGET_META: Record<WidgetKind, { label: string; icon: string; generic: boolean }> = {
   // generic elements
@@ -67,6 +67,9 @@ export const WIDGET_META: Record<WidgetKind, { label: string; icon: string; gene
   spacer: { label: "Spacer", icon: "⇕", generic: true },
   embed: { label: "Embed / HTML", icon: "</>", generic: true },
   map: { label: "Map", icon: "📍", generic: true },
+  quote: { label: "Quote", icon: "❝", generic: true },
+  list: { label: "List", icon: "☰", generic: true },
+  socials: { label: "Social links", icon: "@", generic: true },
   // wedding blocks
   hero: { label: "Hero", icon: "❈", generic: false },
   story: { label: "Our story", icon: "❧", generic: false },
@@ -103,6 +106,9 @@ export function defaultWidgetData(kind: WidgetKind, seed: number): Record<string
     case "spacer": return { height: 48 };
     case "embed": return { html: "" };
     case "map": return { query: "", height: 320 };
+    case "quote": return { text: "A line that means something to the two of you.", cite: "" };
+    case "list": return { items: ["First item", "Second item", "Third item"], ordered: false };
+    case "socials": return { links: [{ network: "instagram", url: "" }] };
     default: {
       // Wedding widget: borrow the Section defaults, drop the wrapper fields.
       const s = newSection(kind as SectionType, seed);

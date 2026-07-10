@@ -29,6 +29,13 @@ const PREVIEW_CSS = `
 .preview-pane.editing .ed-drop.armed{height:14px;background:rgba(91,91,214,.12);outline:1px dashed rgba(91,91,214,.4)}
 .preview-pane.editing .ed-drop.over{height:22px;background:rgba(91,91,214,.4)}
 .preview-pane.editing .ed-empty-col{min-height:60px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(91,91,214,.5);border-radius:4px;color:#9a92c9;font:500 12px ui-sans-serif,system-ui,sans-serif}
+.preview-pane.editing .ed-empty-col.over{background:rgba(91,91,214,.25);border-color:#7b7bea}
+.preview-pane.editing .ed-sdrop{height:8px;transition:height .1s,background .1s}
+.preview-pane.editing .ed-sdrop.armed{height:16px;background:rgba(91,91,214,.14)}
+.preview-pane.editing .ed-sdrop.over{height:30px;background:rgba(91,91,214,.4);outline:2px dashed rgba(91,91,214,.6);outline-offset:-4px}
+.preview-pane.editing .ed-colresize{flex:0 0 8px;align-self:stretch;margin:0 -14px;z-index:15;cursor:col-resize;position:relative}
+.preview-pane.editing .ed-colresize::before{content:"";position:absolute;inset:0 3px;border-radius:3px;background:transparent;transition:background .12s}
+.preview-pane.editing .ed-colresize:hover::before{background:rgba(91,91,214,.55)}
 `;
 
 export default async function InviteBuilderPage() {
