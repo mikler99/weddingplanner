@@ -251,6 +251,8 @@ export const INVITE_CSS = `
 .invite .wd-film-count{font-family:var(--font-display),serif;font-size:2.4rem;font-weight:600;color:var(--gold-2);line-height:1}
 .invite .wd-film.empty .wd-film-count{color:var(--ink-dim)}
 .invite .wd-film-label{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;color:var(--gold)}
+.invite .wd-film-table{text-align:center;font-family:var(--font-display),serif;font-size:1.2rem;color:var(--ink);margin:0 0 4px}
+.invite .wd-film-table span{color:var(--gold);font-style:italic;font-size:.9rem}
 .invite .gal-item,.invite .wd-shot img,.invite .nimg[data-full]{cursor:zoom-in}
 
 /* Photo scavenger hunt */

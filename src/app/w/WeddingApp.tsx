@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { qrSvg } from "@/lib/qr";
 import {
   createPhotoUpload, addPhoto, getPhotos, type PhotoItem,
+  getTableInfo, type TableInfo,
   addGuestbook, getGuestbook, type GuestbookItem,
   addSong, getSongs, type SongItem,
 } from "./app-actions";
@@ -29,14 +30,14 @@ function relTime(iso: string): string {
 
 // Shared upload flow: signed URL → direct upload → record row. Used by both the
 // free camera and the scavenger hunt.
-async function uploadGuestPhoto(slug: string, file: File, opts: { name?: string; caption?: string; prompt?: string }): Promise<{ ok: boolean; error?: string }> {
+async function uploadGuestPhoto(slug: string, file: File, opts: { name?: string; caption?: string; prompt?: string; tableToken?: string }): Promise<{ ok: boolean; error?: string }> {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const up = await createPhotoUpload(slug, ext);
+  const up = await createPhotoUpload(slug, ext, opts.tableToken);
   if (!up.ok || !up.path || !up.token) return { ok: false, error: up.error || "Upload failed" };
   const sb = createClient();
   const { error } = await sb.storage.from("wedding-photos").uploadToSignedUrl(up.path, up.token, file);
   if (error) return { ok: false, error: "Upload failed" };
-  const rec = await addPhoto({ slug, path: up.path, uploaderName: opts.name, caption: opts.caption, prompt: opts.prompt });
+  const rec = await addPhoto({ slug, path: up.path, uploaderName: opts.name, caption: opts.caption, prompt: opts.prompt, tableToken: opts.tableToken });
   return rec.ok ? { ok: true } : { ok: false, error: rec.error || "Could not save" };
 }
 
@@ -68,22 +69,34 @@ function PhotoGrid({ photos, groupId }: { photos: PhotoItem[]; groupId: string }
 }
 
 // --- Disposable camera (free shooting, limited shots) ------------------------
+// Two limit modes:
+//  • Table QR (?t=<token>): a shared, SERVER-enforced roll for the whole table.
+//  • General site link: a per-guest soft limit tracked in localStorage.
 export function CameraBlock({ slug, shots }: { slug: string; shots: number }) {
   const [name, setName] = useGuestName();
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
+  const [tableToken, setTableToken] = useState<string | null>(null);
+  const [table, setTable] = useState<TableInfo | null>(null);
   const [used, spend] = useShotCount(slug);
   const fileRef = useRef<HTMLInputElement>(null);
   const caption = useRef<HTMLInputElement>(null);
 
-  const limit = shots > 0 ? shots : Infinity;
-  const remaining = limit - used;
-  const outOfFilm = remaining <= 0;
+  useEffect(() => { try { const t = new URLSearchParams(window.location.search).get("t"); if (t) setTableToken(t); } catch {} }, []);
+  const loadTable = () => { if (tableToken) getTableInfo(slug, tableToken).then(setTable).catch(() => {}); };
+  useEffect(() => { loadTable(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [tableToken, slug]);
 
   const load = () => { getPhotos(slug).then(setPhotos).catch(() => {}); };
   useEffect(() => { load(); const t = setInterval(load, 15000); return () => clearInterval(t); }, [slug]);
+
+  const tableMode = !!tableToken;
+  const generalLimit = shots > 0 ? shots : Infinity;
+  const remaining = tableMode ? (table?.remaining ?? 0) : generalLimit - used;
+  const tableInvalid = tableMode && table !== null && !table.ok;
+  const outOfFilm = tableInvalid || (tableMode ? table !== null && remaining <= 0 : remaining <= 0);
+  const showCount = tableMode ? table?.ok : Number.isFinite(generalLimit);
 
   const qr = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -95,10 +108,10 @@ export function CameraBlock({ slug, shots }: { slug: string; shots: number }) {
     if (!file || outOfFilm) return;
     setErr(null); setBusy(true);
     try {
-      const r = await uploadGuestPhoto(slug, file, { name, caption: caption.current?.value });
+      const r = await uploadGuestPhoto(slug, file, { name, caption: caption.current?.value, tableToken: tableToken ?? undefined });
       if (!r.ok) throw new Error(r.error);
       if (caption.current) caption.current.value = "";
-      spend();
+      if (tableMode) loadTable(); else spend();
       load();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Something went wrong.");
@@ -111,29 +124,32 @@ export function CameraBlock({ slug, shots }: { slug: string; shots: number }) {
   return (
     <div className="wd-camera">
       <div className="wd-cam-controls">
-        {Number.isFinite(limit) && (
-          <div className={`wd-film ${outOfFilm ? "empty" : ""}`}>
-            <span className="wd-film-count">{Math.max(0, remaining)}</span>
-            <span className="wd-film-label">{outOfFilm ? "🎞️ Out of film" : `shot${remaining === 1 ? "" : "s"} left`}</span>
-          </div>
+        {tableInvalid ? (
+          <p className="wd-err" style={{ textAlign: "center" }}>{table?.error || "That camera code isn't valid."}</p>
+        ) : (
+          <>
+            {tableMode && table?.name && <p className="wd-film-table">🎞️ {table.name}’s camera <span>· shared roll</span></p>}
+            {showCount && (
+              <div className={`wd-film ${outOfFilm ? "empty" : ""}`}>
+                <span className="wd-film-count">{Math.max(0, remaining)}</span>
+                <span className="wd-film-label">{outOfFilm ? "🎞️ Out of film" : `shot${remaining === 1 ? "" : "s"} left${tableMode ? " (shared)" : ""}`}</span>
+              </div>
+            )}
+            {!outOfFilm && <>
+              <input className="wd-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (so we know who to thank)" />
+              <input className="wd-input" ref={caption} type="text" placeholder="Add a caption (optional)" />
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
+              <button type="button" className="wd-shutter" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? "Adding…" : "📷 Take a photo"}</button>
+            </>}
+            {outOfFilm && <p className="wd-empty" style={{ marginTop: 0 }}>{tableMode ? "Your table's roll is used up — thank you for capturing the day!" : "Your roll is used up — thank you for capturing the day!"} The photos are in the gallery below.</p>}
+          </>
         )}
-        {!outOfFilm && <>
-          <input className="wd-input" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name (so we know who to thank)" />
-          <input className="wd-input" ref={caption} type="text" placeholder="Add a caption (optional)" />
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={onPick} />
-          <button type="button" className="wd-shutter" disabled={busy} onClick={() => fileRef.current?.click()}>
-            {busy ? "Adding…" : "📷 Take a photo"}
-          </button>
-        </>}
-        {outOfFilm && <p className="wd-empty" style={{ marginTop: 0 }}>Your roll is used up — thank you for capturing the day! Your photos are in the gallery below.</p>}
         {err && <p className="wd-err">{err}</p>}
         {qr && (
-          <button type="button" className="wd-qr-toggle" onClick={() => setShowQr((v) => !v)}>
-            {showQr ? "Hide QR" : "Share this camera (QR)"}
-          </button>
+          <button type="button" className="wd-qr-toggle" onClick={() => setShowQr((v) => !v)}>{showQr ? "Hide QR" : "Share this camera (QR)"}</button>
         )}
         {showQr && qr && (
-          <div className="wd-qr"><div className="wd-qr-img" dangerouslySetInnerHTML={{ __html: qr }} /><p>Scan to open the camera on another phone</p></div>
+          <div className="wd-qr"><div className="wd-qr-img" dangerouslySetInnerHTML={{ __html: qr }} /><p>Scan to open this camera on another phone</p></div>
         )}
       </div>
 

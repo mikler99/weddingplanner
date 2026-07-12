@@ -13,7 +13,7 @@ export const MODULES: AppModule[] = [
   { key: "vendors", href: "/vendors", label: "Vendors", icon: "🤝", group: "Planning", desc: "Suppliers, status & contracts" },
   { key: "calendar", href: "/calendar", label: "Calendar", icon: "🗓️", group: "Planning", desc: "Payment plan & to-dos on a timeline" },
   { key: "savings", href: "/savings", label: "Budget & savings", icon: "📈", group: "Planning", desc: "Personal budget → savings & cash-flow" },
-  { key: "website", href: "/invite", label: "Website", icon: "🌐", group: "People & docs", desc: "Build your public wedding site" },
+  { key: "website", href: "/website", label: "Website", icon: "🌐", group: "People & docs", desc: "Design, cameras, settings & more" },
   { key: "guests", href: "/guests", label: "Guests", icon: "✉️", group: "People & docs", desc: "Guest list, headcount, RSVP" },
   { key: "documents", href: "/documents", label: "Documents", icon: "📄", group: "People & docs", desc: "Upload quotes, extract with AI" },
 ];

@@ -14,6 +14,31 @@ async function weddingIdForSlug(slug: string): Promise<string | null> {
   return data?.id ?? null;
 }
 
+type TableRow = { id: string; name: string; shot_limit: number };
+async function tableForToken(weddingId: string, token: string): Promise<TableRow | null> {
+  const admin = createAdminClient();
+  const { data } = await admin.from("camera_tables").select("id, name, shot_limit").eq("wedding_id", weddingId).eq("token", token).maybeSingle();
+  return (data as TableRow) ?? null;
+}
+async function tableUsed(tableId: string): Promise<number> {
+  const admin = createAdminClient();
+  const { count } = await admin.from("wedding_photos").select("id", { count: "exact", head: true }).eq("table_id", tableId);
+  return count ?? 0;
+}
+
+export type TableInfo = { ok: boolean; name?: string; limit?: number; used?: number; remaining?: number; error?: string };
+
+// The camera calls this when opened via a table QR (?t=<token>) to show the
+// table's shared roll: how many shots the whole table has left.
+export async function getTableInfo(slug: string, token: string): Promise<TableInfo> {
+  const wid = await weddingIdForSlug(slug);
+  if (!wid) return { ok: false, error: "Wedding not found." };
+  const t = await tableForToken(wid, token);
+  if (!t) return { ok: false, error: "That camera code isn't valid." };
+  const used = await tableUsed(t.id);
+  return { ok: true, name: t.name, limit: t.shot_limit, used, remaining: Math.max(0, t.shot_limit - used) };
+}
+
 function clip(s: unknown, max: number): string {
   return typeof s === "string" ? s.trim().slice(0, max) : "";
 }
@@ -24,9 +49,16 @@ export type PhotoItem = { id: string; url: string; uploaderName: string | null; 
 
 // Hand the browser a one-shot signed upload URL for a path we control, so the
 // anonymous guest can upload straight to storage without an insert policy.
-export async function createPhotoUpload(slug: string, ext: string): Promise<{ ok: boolean; path?: string; token?: string; error?: string }> {
+// If a table token is given, pre-check its shared roll so we don't waste an
+// upload once the table is out of film.
+export async function createPhotoUpload(slug: string, ext: string, tableToken?: string): Promise<{ ok: boolean; path?: string; token?: string; error?: string }> {
   const wid = await weddingIdForSlug(slug);
   if (!wid) return { ok: false, error: "Wedding not found." };
+  if (tableToken) {
+    const t = await tableForToken(wid, tableToken);
+    if (!t) return { ok: false, error: "That camera code isn't valid." };
+    if ((await tableUsed(t.id)) >= t.shot_limit) return { ok: false, error: `Table “${t.name}” has used its whole roll of film.` };
+  }
   const safeExt = /^(jpe?g|png|webp|heic|gif)$/i.test(ext) ? ext.toLowerCase() : "jpg";
   const path = `${wid}/${crypto.randomUUID()}.${safeExt}`;
   const admin = createAdminClient();
@@ -35,11 +67,19 @@ export async function createPhotoUpload(slug: string, ext: string): Promise<{ ok
   return { ok: true, path: data.path, token: data.token };
 }
 
-export async function addPhoto(input: { slug: string; path: string; uploaderName?: string; caption?: string; prompt?: string }): Promise<{ ok: boolean; error?: string }> {
+export async function addPhoto(input: { slug: string; path: string; uploaderName?: string; caption?: string; prompt?: string; tableToken?: string }): Promise<{ ok: boolean; error?: string }> {
   const wid = await weddingIdForSlug(input.slug);
   if (!wid) return { ok: false, error: "Wedding not found." };
   // The path must live under this wedding's folder — reject anything else.
   if (!input.path.startsWith(`${wid}/`)) return { ok: false, error: "Invalid upload." };
+  let tableId: string | null = null;
+  if (input.tableToken) {
+    const t = await tableForToken(wid, input.tableToken);
+    if (!t) return { ok: false, error: "That camera code isn't valid." };
+    // Server-enforced shared roll (final check — races may allow a slight overshoot).
+    if ((await tableUsed(t.id)) >= t.shot_limit) return { ok: false, error: `Table “${t.name}” has used its whole roll of film.` };
+    tableId = t.id;
+  }
   const admin = createAdminClient();
   const { error } = await admin.from("wedding_photos").insert({
     wedding_id: wid,
@@ -47,6 +87,7 @@ export async function addPhoto(input: { slug: string; path: string; uploaderName
     uploader_name: clip(input.uploaderName, 60) || null,
     caption: clip(input.caption, 200) || null,
     prompt: clip(input.prompt, 200) || null,
+    table_id: tableId,
   });
   if (error) return { ok: false, error: "Could not save the photo." };
   return { ok: true };
