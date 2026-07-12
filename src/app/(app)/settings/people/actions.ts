@@ -31,16 +31,17 @@ async function origin(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-export async function inviteMember(weddingId: string, email: string, role: "editor" | "viewer"): Promise<Result & { link?: string; emailed?: boolean }> {
+export async function inviteMember(weddingId: string, email: string, role: "editor" | "viewer", modules?: string[] | null): Promise<Result & { link?: string; emailed?: boolean }> {
   const inviter = await callerOwner(weddingId);
   if (!inviter) return fail("Only owners can invite people.");
   const e = z.string().email().safeParse(email.trim());
   if (!e.success) return fail("Enter a valid email address.");
   if (!["editor", "viewer"].includes(role)) return fail("Invalid role.");
+  const allowed_modules = modules && modules.length ? [...new Set(modules.map(String))] : null;
 
   const admin = createAdminClient();
   const token = randomBytes(24).toString("base64url");
-  const { error } = await admin.from("member_invites").insert({ wedding_id: weddingId, email: e.data, role, token, invited_by: inviter });
+  const { error } = await admin.from("member_invites").insert({ wedding_id: weddingId, email: e.data, role, token, invited_by: inviter, allowed_modules });
   if (error) return fail(error.message);
 
   const link = `${await origin()}/join/${token}`;

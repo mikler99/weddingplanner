@@ -13,6 +13,7 @@ export function MembersClient({ weddingId, isOwner, members, invites }: { weddin
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"editor" | "viewer">("viewer");
+  const [modules, setModules] = useState<string[] | null>(null); // null = all
   const [note, setNote] = useState<{ tone: "good" | "bad" | "muted"; text: string } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, start] = useTransition();
@@ -23,10 +24,10 @@ export function MembersClient({ weddingId, isOwner, members, invites }: { weddin
 
   const invite = () =>
     start(async () => {
-      const r = await inviteMember(weddingId, email, role);
+      const r = await inviteMember(weddingId, email, role, modules);
       if (!r.ok) { flash("bad", r.error); return; }
-      setEmail("");
-      flash(r.emailed ? "good" : "muted", r.emailed ? `Invitation emailed to ${email}.` : `Invite created — copy the link to share (email isn't set up).`);
+      setEmail(""); setModules(null);
+      flash(r.emailed ? "good" : "muted", r.emailed ? `Invitation emailed to ${email}.` : `Invite created — copy the link to share it.`);
       router.refresh();
     });
 
@@ -45,8 +46,10 @@ export function MembersClient({ weddingId, isOwner, members, invites }: { weddin
               <option value="viewer">Viewer (view only)</option>
               <option value="editor">Editor (can edit)</option>
             </select>
+            <ModulePicker value={modules} onChange={setModules} />
             <button onClick={invite} disabled={busy || !email} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50">Invite</button>
           </div>
+          <p className="mt-2 text-xs text-faint">They set a password from the invite link and go straight in — no confirmation email.</p>
         </div>
       )}
 
@@ -93,6 +96,39 @@ export function MembersClient({ weddingId, isOwner, members, invites }: { weddin
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+// Presentational module multi-select (used when inviting). null = full access.
+function ModulePicker({ value, onChange }: { value: string[] | null; onChange: (v: string[] | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const allKeys = ASSIGNABLE_MODULES.map((m) => m.key);
+  const checked = (k: string) => !value || value.includes(k);
+  const label = !value ? "Access: Full" : `Access: ${value.length}`;
+  const toggle = (k: string) => {
+    const cur = value ?? [...allKeys];
+    const next = cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k];
+    onChange(next.length >= allKeys.length ? null : next);
+  };
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-muted hover:text-ink">{label} ▾</button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-lg border border-line bg-surface p-2 shadow-lg">
+            <p className="px-1 pb-1 text-[11px] text-muted">Can see these pages:</p>
+            {ASSIGNABLE_MODULES.map((m) => (
+              <label key={m.key} className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-surface-2">
+                <input type="checkbox" checked={checked(m.key)} onChange={() => toggle(m.key)} className="h-3.5 w-3.5 accent-[var(--accent)]" />
+                <span>{m.icon} {m.label}</span>
+              </label>
+            ))}
+            <p className="px-1 pt-1 text-[10px] text-faint">Hub is always visible.</p>
+          </div>
+        </>
       )}
     </div>
   );

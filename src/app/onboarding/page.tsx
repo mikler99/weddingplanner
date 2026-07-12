@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { getMembership } from "@/lib/wedding";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { REGIONS } from "@/lib/wedding-defaults";
 import { createWedding } from "./actions";
 
@@ -7,6 +9,15 @@ export default async function OnboardingPage({ searchParams }: { searchParams: P
   // Already have a wedding? Straight to the hub.
   if (await getMembership()) redirect("/");
   const { e } = await searchParams;
+
+  // Invited but not yet joined? Send them to accept, not create a new wedding.
+  const { data: { user } } = await (await createClient()).auth.getUser();
+  if (user?.email) {
+    const { data: pending } = await createAdminClient()
+      .from("member_invites").select("token").ilike("email", user.email).is("accepted_at", null)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (pending?.token) redirect(`/join/${pending.token}`);
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-6 px-6 py-10">
