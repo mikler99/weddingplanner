@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { signOut } from "@/app/login/actions";
 import { visibleModules, GROUP_ORDER, type AppModule } from "@/lib/modules";
+import { RoleProvider, ReadOnly } from "./role-context";
 
 function monogram(name: string) {
   const parts = name.split(/&|\band\b|\+/).map((s) => s.trim()).filter(Boolean);
@@ -80,7 +81,14 @@ export function Shell({
       )}
 
       {/* Content */}
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1">
+        {isViewer && (
+          <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-4 py-1.5 text-xs text-muted">
+            <span aria-hidden>👁</span> You have <strong className="font-semibold">view-only</strong> access — you can browse everything but not make changes.
+          </div>
+        )}
+        <RoleProvider canEdit={!isViewer}><ReadOnly>{children}</ReadOnly></RoleProvider>
+      </div>
     </div>
   );
 }

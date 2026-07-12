@@ -39,10 +39,22 @@ const PREVIEW_CSS = `
 `;
 
 export default async function InviteBuilderPage() {
-  const { wedding_id } = await requireModule("website");
+  const { wedding_id, role } = await requireModule("website");
   const supabase = await createClient();
-  const { data } = await supabase.from("weddings").select("invite_config").eq("id", wedding_id).single();
+  const { data } = await supabase.from("weddings").select("invite_config, slug").eq("id", wedding_id).single();
   const site = normalizeSite(data?.invite_config);
+
+  // The builder is a drag-and-drop editor (not plain form controls), so the
+  // view-only <fieldset> can't lock it — gate viewers here instead.
+  if (role === "viewer") {
+    return (
+      <div className="mx-auto max-w-lg px-6 py-16 text-center">
+        <p className="text-2xl">👁</p>
+        <h1 className="mt-2 font-display text-xl font-semibold">The website designer is edit-only</h1>
+        <p className="mt-2 text-sm text-muted">You have view-only access. {data?.slug ? <>You can browse the live site at <a href={`/w/${data.slug}`} target="_blank" rel="noreferrer" className="text-accent hover:underline">/w/{data.slug}</a>.</> : "Ask an editor for access to make changes."}</p>
+      </div>
+    );
+  }
 
   return (
     <>

@@ -8,6 +8,16 @@ import { resolveDue, type DueRule } from "@/lib/payments";
 import type { Suggestions, PaymentSuggestion, TaskSuggestion } from "@/lib/planner-suggestions";
 import * as actions from "./actions";
 
+// Anchor styled as a button — used for month navigation so it keeps working for
+// view-only members (who sit inside a disabled <fieldset> that would disable a
+// real <button>). Navigation, not mutation, so it's fine to leave enabled.
+function MonthNav({ onClick, className, children }: { onClick: () => void; className?: string; children: React.ReactNode }) {
+  return (
+    <a role="button" tabIndex={0} onClick={onClick} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } }}
+      className={`cursor-pointer select-none rounded-md border border-line text-muted hover:text-ink ${className ?? ""}`}>{children}</a>
+  );
+}
+
 export type CalPayment = { id: string; label: string; amount: number; due_date: string | null; due_rule: DueRule | null; paid: boolean; vendor_id: string | null };
 export type CalTask = { id: string; task: string; due_date: string | null; due_rule: DueRule | null; done: boolean; owner: string | null; vendor_id: string | null };
 type Vendor = { id: string; name: string };
@@ -115,10 +125,12 @@ export function CalendarClient({ weddingId, scenarioId, scenarios, isActivePlan,
         <section className="min-w-0 rounded-2xl border border-line bg-surface p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-display text-lg font-semibold">{MONTHS[view.m]} {view.y}</h2>
+            {/* Anchors (not <button>) so month navigation still works for
+                view-only members, who are inside a disabled <fieldset>. */}
             <div className="flex items-center gap-1">
-              <button onClick={() => { const d = parseIso(todayIso); setView({ y: d.getFullYear(), m: d.getMonth() }); }} className="rounded-md border border-line px-2 py-1 text-xs font-medium text-muted hover:text-ink">Today</button>
-              <button onClick={() => shiftMonth(-1)} className="rounded-md border border-line px-2 py-1 text-sm text-muted hover:text-ink">‹</button>
-              <button onClick={() => shiftMonth(1)} className="rounded-md border border-line px-2 py-1 text-sm text-muted hover:text-ink">›</button>
+              <MonthNav onClick={() => { const d = parseIso(todayIso); setView({ y: d.getFullYear(), m: d.getMonth() }); }} className="px-2 py-1 text-xs font-medium">Today</MonthNav>
+              <MonthNav onClick={() => shiftMonth(-1)} className="px-2 py-1 text-sm">‹</MonthNav>
+              <MonthNav onClick={() => shiftMonth(1)} className="px-2 py-1 text-sm">›</MonthNav>
             </div>
           </div>
           <div className="grid grid-cols-7 border-b border-line pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-faint">
