@@ -45,8 +45,8 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
   }
 
   const site = normalizeSite(row.invite_config);
-  const pageSlug = page?.[0] ?? "home";
-  if (page?.[0] && !site.pages.some((p) => p.slug === page[0])) notFound();
+  const pageSlug = page?.[0]; // undefined → home (first page)
+  if (pageSlug && !site.pages.some((p) => p.slug === pageSlug)) notFound();
 
   // Guest context: if they arrived via their personal link, a cookie identifies
   // them so the RSVP form is personalized. Verify the token belongs to THIS site.

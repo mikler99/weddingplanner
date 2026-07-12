@@ -1,9 +1,9 @@
 "use client";
 
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useState } from "react";
 import type { InviteConfig, Section } from "@/lib/invite-config";
 import { themeVars } from "@/lib/invite-config";
-import { pageBySlug, type SiteConfig } from "@/lib/site-config";
+import { pageBySlug, isHomePage, type SiteConfig } from "@/lib/site-config";
 import {
   type SectionNode, type ColumnNode, type WidgetNode, type NodeStyle, type Sides,
   normalizePage, isPassthrough, widgetToSection, findWidget, WIDGET_META,
@@ -48,19 +48,25 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", sl
   if (heroImg) (style as Record<string, string>)["--img-hero"] = `url('${heroImg}')`;
 
   const navPages = site.pages.filter((p) => p.showInNav);
-  const hrefFor = (slug: string) => (slug === "home" ? base || "/" : `${base}/${slug}`);
+  const customLinks = site.nav?.links ?? [];
+  const brand = site.nav?.brand?.trim();
+  const hrefForPage = (p: typeof site.pages[number]) => (isHomePage(site, p) ? base || "/" : `${base}/${p.slug}`);
+  const showNav = !!brand || navPages.length > 1 || customLinks.length > 0;
 
   return (
     <>
       <div className="invite" style={style}>
         <div className="bg-wood" />
         <div className="bg-veil" />
-        {navPages.length > 1 && (
-          <nav className="site-nav">
-            {navPages.map((p) => (
-              <a key={p.id} href={mode === "live" ? hrefFor(p.slug) : undefined} className={p.slug === page.slug ? "current" : ""}>{p.title}</a>
-            ))}
-          </nav>
+        {showNav && (
+          <SiteNav
+            brand={brand}
+            live={mode === "live"}
+            items={[
+              ...navPages.map((p) => ({ key: p.id, label: p.title, href: hrefForPage(p), current: p.id === page.id })),
+              ...customLinks.filter((l) => l.label).map((l) => ({ key: l.id, label: l.label, href: l.href || "#", current: false })),
+            ]}
+          />
         )}
         <BlocksRenderer blocks={blocks} mode={mode} token={token} guest={guest} slug={slug} />
       </div>
@@ -388,6 +394,22 @@ function hideClass(st?: NodeStyle): string {
 function animClass(st?: NodeStyle, mode?: Mode): string {
   if (mode !== "live" || !st?.animation || st.animation === "none") return "";
   return st.animation === "rise" ? "rise" : `n-${st.animation}`;
+}
+
+type NavItem = { key: string; label: string; href: string; current: boolean };
+function SiteNav({ brand, items, live }: { brand?: string; items: NavItem[]; live: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <nav className={`site-nav ${open ? "open" : ""}`}>
+      {brand && <a className="site-nav-brand" href={live ? "/" : undefined}>{brand}</a>}
+      {items.length > 0 && <button type="button" className="site-nav-toggle" aria-label="Menu" onClick={() => setOpen((v) => !v)}>☰</button>}
+      <div className="site-nav-links">
+        {items.map((it) => (
+          <a key={it.key} href={live ? it.href : undefined} className={it.current ? "current" : ""} onClick={() => setOpen(false)}>{it.label}</a>
+        ))}
+      </div>
+    </nav>
+  );
 }
 
 // rise helper: reveal-on-scroll only in the live invite; always-visible in the builder

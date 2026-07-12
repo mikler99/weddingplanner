@@ -132,10 +132,20 @@ export const INVITE_CSS = `
 
 }
 .invite{min-height:100vh}
-.invite .site-nav{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;justify-content:center;gap:4px 22px;padding:13px 20px;background:rgba(14,10,6,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid rgba(201,168,106,.18)}
+.invite .site-nav{position:sticky;top:0;z-index:6;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 22px;padding:13px 20px;background:rgba(14,10,6,.72);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-bottom:1px solid rgba(201,168,106,.18)}
+.invite .site-nav-brand{font-family:var(--font-script),cursive;font-size:1.5rem;color:var(--gold-2);text-decoration:none;margin-right:auto;line-height:1}
+.invite .site-nav-toggle{display:none;background:none;border:0;color:var(--ink-soft);font-size:1.3rem;cursor:pointer;line-height:1;padding:2px 6px}
+.invite .site-nav-links{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:4px 22px}
 .invite .site-nav a{font-family:var(--font-sans),sans-serif;text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;color:var(--ink-soft);text-decoration:none;padding:4px 2px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s}
-.invite .site-nav a:hover{color:var(--ink)}
-.invite .site-nav a.current{color:var(--gold-2);border-color:var(--gold)}
+.invite .site-nav-links a:hover{color:var(--ink)}
+.invite .site-nav-links a.current{color:var(--gold-2);border-color:var(--gold)}
+@media(max-width:640px){
+  .invite .site-nav{flex-wrap:nowrap;justify-content:space-between}
+  .invite .site-nav-brand{margin-right:0}
+  .invite .site-nav-toggle{display:block}
+  .invite .site-nav-links{display:none;flex-basis:100%;flex-direction:column;gap:14px;padding-top:12px}
+  .invite .site-nav.open .site-nav-links{display:flex}
+}
 .invite .timeline{max-width:580px;margin:26px auto 0;text-align:left}
 .invite .tl-item{display:flex;gap:18px;padding:14px 0;border-bottom:1px solid rgba(201,168,106,.14)}
 .invite .tl-item:last-child{border-bottom:0}

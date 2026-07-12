@@ -11,26 +11,35 @@ import { type Section, type Theme, DEFAULT_THEME, DEFAULT_INVITE, newSection } f
 // type stays structural (not importing site-nodes) to avoid an import cycle.
 export type SitePage = { id: string; slug: string; title: string; showInNav: boolean; sections: Section[]; blocks?: unknown[] };
 export type NamedTheme = { id: string; name: string; theme: Theme };
-export type SiteConfig = { theme: Theme; savedThemes?: NamedTheme[]; pages: SitePage[] };
+export type NavLink = { id: string; label: string; href: string };
+export type SiteNav = { brand?: string; links?: NavLink[] };
+export type SiteConfig = { theme: Theme; savedThemes?: NamedTheme[]; nav?: SiteNav; pages: SitePage[] };
 
-type RawConfig = { theme?: Partial<Theme>; sections?: Section[]; pages?: SitePage[]; savedThemes?: NamedTheme[] } | null | undefined;
+type RawConfig = { theme?: Partial<Theme>; sections?: Section[]; pages?: SitePage[]; savedThemes?: NamedTheme[]; nav?: SiteNav } | null | undefined;
 
 export function normalizeSite(raw: unknown): SiteConfig {
   const c = raw as RawConfig;
   const theme: Theme = { ...DEFAULT_THEME, ...(c?.theme ?? {}) };
   const savedThemes = c?.savedThemes;
+  const nav = c?.nav;
 
   // Already multi-page.
   if (c && Array.isArray(c.pages) && c.pages.length) {
-    return { theme, savedThemes, pages: c.pages };
+    return { theme, savedThemes, nav, pages: c.pages };
   }
   // Old single-page shape (or null) → one Home page holding all sections.
   const sections = c && Array.isArray(c.sections) && c.sections.length ? c.sections : DEFAULT_INVITE.sections;
-  return { theme, savedThemes, pages: [{ id: "home", slug: "home", title: "Home", showInNav: true, sections }] };
+  return { theme, savedThemes, nav, pages: [{ id: "home", slug: "home", title: "Home", showInNav: true, sections }] };
+}
+
+// The home page is simply the first page in order (served at /w/<slug>).
+export function isHomePage(site: SiteConfig, page: SitePage): boolean {
+  return site.pages[0]?.id === page.id;
 }
 
 export function pageBySlug(site: SiteConfig, slug?: string): SitePage {
-  return site.pages.find((p) => p.slug === (slug || "home")) ?? site.pages[0];
+  if (!slug) return site.pages[0];
+  return site.pages.find((p) => p.slug === slug) ?? site.pages[0];
 }
 
 export const DEFAULT_SITE: SiteConfig = normalizeSite(DEFAULT_INVITE);
