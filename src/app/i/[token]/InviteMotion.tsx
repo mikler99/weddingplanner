@@ -22,22 +22,28 @@ export function InviteMotion({ targetIso }: { targetIso: string }) {
     const t = setTimeout(() => {
       els.forEach((el) => { const r = el.getBoundingClientRect(); if (r.top < innerHeight && r.bottom > 0) show(el); });
     }, 2600);
+    // Safety net: whatever happens with the observer, nothing stays hidden.
+    const t2 = setTimeout(() => els.forEach(show), 5000);
 
+    // Countdown (only when a valid target is provided).
     const target = new Date(targetIso).getTime();
-    const pad = (n: number) => (n < 10 ? "0" + n : "" + n);
-    const set = (id: string, v: string) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    const tick = () => {
-      let d = target - Date.now();
-      if (d < 0) d = 0;
-      set("cd-d", String(Math.floor(d / 86400000)));
-      set("cd-h", pad(Math.floor((d % 86400000) / 3600000)));
-      set("cd-m", pad(Math.floor((d % 3600000) / 60000)));
-      set("cd-s", pad(Math.floor((d % 60000) / 1000)));
-    };
-    tick();
-    const iv = setInterval(tick, 1000);
+    let iv: ReturnType<typeof setInterval> | undefined;
+    if (targetIso && !Number.isNaN(target)) {
+      const pad = (n: number) => (n < 10 ? "0" + n : "" + n);
+      const set = (id: string, v: string) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      const tick = () => {
+        let d = target - Date.now();
+        if (d < 0) d = 0;
+        set("cd-d", String(Math.floor(d / 86400000)));
+        set("cd-h", pad(Math.floor((d % 86400000) / 3600000)));
+        set("cd-m", pad(Math.floor((d % 3600000) / 60000)));
+        set("cd-s", pad(Math.floor((d % 60000) / 1000)));
+      };
+      tick();
+      iv = setInterval(tick, 1000);
+    }
 
-    return () => { obs?.disconnect(); clearTimeout(t); clearInterval(iv); };
+    return () => { obs?.disconnect(); clearTimeout(t); clearTimeout(t2); if (iv) clearInterval(iv); };
   }, [targetIso]);
 
   return null;

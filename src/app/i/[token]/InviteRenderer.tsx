@@ -30,7 +30,7 @@ export function InviteRenderer({ config, mode, token, guest }: { config: InviteC
           <SectionView key={s.id} s={s} mode={mode} token={token} guest={guest} />
         ))}
       </div>
-      {mode === "live" && countdown && <InviteMotion targetIso={countdown.targetIso} />}
+      {mode === "live" && <InviteMotion targetIso={countdown?.targetIso ?? ""} />}
     </>
   );
 }
@@ -70,7 +70,10 @@ export function SiteRenderer({ site, pageSlug, mode, token, guest, base = "", sl
         )}
         <BlocksRenderer blocks={blocks} mode={mode} token={token} guest={guest} slug={slug} />
       </div>
-      {mode === "live" && countdown && <InviteMotion targetIso={(countdown.data as { targetIso?: string }).targetIso ?? ""} />}
+      {/* Always mount on the live site: InviteMotion runs the scroll-reveal that
+          makes .rise content visible — NOT just the countdown. Gating it on a
+          countdown widget hid all content on pages without one. */}
+      {mode === "live" && <InviteMotion targetIso={(countdown?.data as { targetIso?: string } | undefined)?.targetIso ?? ""} />}
       {mode === "live" && <Lightbox />}
     </>
   );
