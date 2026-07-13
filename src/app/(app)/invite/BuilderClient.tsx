@@ -29,7 +29,8 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
   const [pageId, setPageId] = useState<string>(initial.pages[0]?.id ?? "home");
   const [sel, setSel] = useState<Sel>({ kind: "theme" });
   const [tab, setTab] = useState<"content" | "style" | "advanced">("content");
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [addingPage, setAddingPage] = useState(false);
   const [addingSection, setAddingSection] = useState(false);
@@ -47,8 +48,23 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
     setSite(next);
     setStatus("saving");
     clearTimeout(timer.current);
-    timer.current = setTimeout(async () => { const r = await saveInviteConfig(weddingId, next); setStatus(r.ok ? "saved" : "idle"); }, 700);
+    timer.current = setTimeout(() => void persist(next), 700);
   };
+  // Persist and SURFACE failures — a silent failed save is why edits could look
+  // fine in-session but vanish on reload. On error we keep retrying the latest
+  // state so a transient blip self-heals, and warn until it succeeds.
+  const persist = async (next: SiteConfig) => {
+    try {
+      const r = await saveInviteConfig(weddingId, next);
+      if (r.ok) { setStatus("saved"); setSaveErr(null); }
+      else { setStatus("error"); setSaveErr(r.error ?? "Your last change didn’t save."); }
+    } catch {
+      setStatus("error"); setSaveErr("Couldn’t reach the server — retrying…");
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => void persist(next), 4000);
+    }
+  };
+  const retrySave = () => { clearTimeout(timer.current); setStatus("saving"); void persist(site); };
 
   const page = site.pages.find((p) => p.id === pageId) ?? site.pages[0];
   const blocks = (page.blocks as SectionNode[] | undefined) ?? [];
@@ -196,8 +212,15 @@ export function BuilderClient({ weddingId, initial }: { weddingId: string; initi
       <aside className="flex max-h-[45vh] w-full flex-none flex-col overflow-y-auto border-b border-line bg-surface lg:max-h-none lg:w-64 lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between border-b border-line px-3 py-2.5">
           <span className="text-sm font-semibold">Website</span>
-          <span className="text-[11px] text-faint">{status === "saving" ? "Saving…" : status === "saved" ? "Saved ✓" : ""}</span>
+          <span className={`text-[11px] ${status === "error" ? "font-semibold text-bad" : "text-faint"}`}>{status === "saving" ? "Saving…" : status === "saved" ? "Saved ✓" : status === "error" ? "⚠ Not saved" : ""}</span>
         </div>
+        {status === "error" && (
+          <div className="border-b border-bad/30 bg-bad/10 px-3 py-2 text-[11px] text-bad">
+            {saveErr ?? "Your last change didn’t save."}{" "}
+            <button onClick={retrySave} className="font-semibold underline">Retry</button>
+            <span className="mt-1 block text-bad/80">Your work is still here — don’t reload until this saves.</span>
+          </div>
+        )}
         <button onClick={() => setSel({ kind: "theme" })} className={`border-b border-line px-3 py-2 text-left text-sm ${sel?.kind === "theme" ? "bg-accent-weak font-semibold text-accent" : "hover:bg-surface-2"}`}>🎨 Theme &amp; fonts</button>
 
         {/* Pages */}
