@@ -4,7 +4,7 @@ import { summarize, type Guest, type GuestsView } from "@/lib/guests-core";
 export type { Rsvp, Guest, GuestSummary, GuestsView } from "@/lib/guests-core";
 export { summarize } from "@/lib/guests-core";
 
-const COLS = "id, name, invite_token, email, parent_id, address, side, max_seats, invited, rsvp, attending_count, dietary, sort";
+const COLS = "id, name, invite_token, email, parent_id, address, side, max_seats, invited, rsvp, attending_count, dietary, responded_at, sort";
 
 // Side options from the wedding name, e.g. "Michael & Olivia McCann" → Michael / Olivia / Both.
 function sidesFromName(name: string): string[] {
@@ -19,7 +19,7 @@ export async function loadGuests(weddingId: string): Promise<GuestsView | null> 
   const supabase = await createClient();
   const [gRes, wRes] = await Promise.all([
     supabase.from("guests").select(COLS).eq("wedding_id", weddingId).order("sort").order("name"),
-    supabase.from("weddings").select("name, guest_estimate").eq("id", weddingId).single(),
+    supabase.from("weddings").select("name, guest_estimate, rsvp_deadline").eq("id", weddingId).single(),
   ]);
   if (wRes.error || !wRes.data) return null;
   const guests = (gRes.data ?? []) as Guest[];
@@ -28,5 +28,7 @@ export async function loadGuests(weddingId: string): Promise<GuestsView | null> 
     summary: summarize(guests),
     guestEstimate: wRes.data.guest_estimate ?? 0,
     sides: sidesFromName(wRes.data.name ?? ""),
+    rsvpDeadline: wRes.data.rsvp_deadline ?? null,
+    coupleName: wRes.data.name ?? "Our Wedding",
   };
 }

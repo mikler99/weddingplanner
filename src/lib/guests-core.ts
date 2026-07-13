@@ -16,6 +16,7 @@ export type Guest = {
   rsvp: Rsvp;
   attending_count: number | null;
   dietary: string | null;
+  responded_at: string | null; // when the guest submitted their RSVP
   sort: number;
 };
 
@@ -33,6 +34,8 @@ export type GuestsView = {
   summary: GuestSummary;
   guestEstimate: number; // the active plan's headcount (what the budget uses)
   sides: string[]; // Side options derived from the couple's names
+  rsvpDeadline: string | null; // ISO date the couple asked guests to reply by
+  coupleName: string; // the wedding name, for reminder emails + exports
 };
 
 export function summarize(guests: Guest[]): GuestSummary {

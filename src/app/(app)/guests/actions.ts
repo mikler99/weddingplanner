@@ -83,6 +83,16 @@ export async function importGuests(weddingId: string, rows: z.infer<typeof impor
   return { ok: true, added: toInsert.length };
 }
 
+// The RSVP-by date the couple asks guests to reply by (drives the nudge + reminders).
+export async function setRsvpDeadline(weddingId: string, date: string | null): Promise<Result> {
+  const d = date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  const supabase = await createClient();
+  const { error } = await supabase.from("weddings").update({ rsvp_deadline: d }).eq("id", weddingId);
+  if (error) return fail(error.message);
+  revalidatePath("/guests");
+  return ok;
+}
+
 // Adopt the confirmed headcount as the budget's guest number (fired from the nudge).
 export async function useHeadcount(weddingId: string, guests: number): Promise<Result> {
   const g = z.number().int().min(0).max(10000).safeParse(guests);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Guest, GuestsView, Rsvp } from "@/lib/guests-core";
 import { summarize } from "@/lib/guests-core";
 import * as actions from "./actions";
+import { sendReminders } from "./send/actions";
 
 type ImportRow = { name: string; email?: string; address?: string; side?: string; max_seats?: number; dietary?: string };
 
@@ -70,14 +71,31 @@ const RSVP_STYLE: Record<Rsvp, string> = {
   pending: "text-muted",
 };
 
-export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { weddingId: string } & GuestsView) {
+const FILTERS: { key: "all" | Rsvp; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "yes", label: "Coming" },
+  { key: "pending", label: "Awaiting" },
+  { key: "no", label: "Declined" },
+];
+
+function relDays(iso: string): string {
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return d <= 0 ? "today" : d === 1 ? "1d ago" : d < 30 ? `${d}d ago` : new Date(iso).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
+
+export function GuestsClient({ weddingId, guests, guestEstimate, sides, rsvpDeadline, coupleName }: { weddingId: string } & GuestsView) {
   const router = useRouter();
   const [rows, setRows] = useState<Guest[]>(guests);
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ rows: ImportRow[]; fileName: string } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | Rsvp>("all");
+  const [deadline, setDeadline] = useState<string>(rsvpDeadline ?? "");
+  const [note, setNote] = useState<{ tone: "good" | "bad" | "muted"; text: string } | null>(null);
+  const [showDiet, setShowDiet] = useState(false);
   const [pending, start] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => setDeadline(rsvpDeadline ?? ""), [rsvpDeadline]);
 
   const copyLink = async (g: Guest) => {
     if (!g.invite_token) return;
@@ -100,13 +118,43 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
       if (g.parent_id) (kids.get(g.parent_id) ?? kids.set(g.parent_id, []).get(g.parent_id)!).push(g);
       else tops.push(g);
     }
+    const match = (g: Guest) => filter === "all" ? true : filter === "pending" ? g.invited && g.rsvp === "pending" : g.rsvp === filter;
     const ordered: { g: Guest; child: boolean }[] = [];
     for (const t of tops) {
+      if (!match(t)) continue;
       ordered.push({ g: t, child: false });
       for (const k of kids.get(t.id) ?? []) ordered.push({ g: k, child: true });
     }
     return { ordered, hostName: (id: string | null) => (id ? nameById.get(id) ?? "" : "") };
-  }, [rows]);
+  }, [rows, filter]);
+
+  // RSVP-tracking derived data.
+  const pendingWithEmail = useMemo(() => rows.filter((g) => !g.parent_id && g.invited && g.rsvp === "pending" && g.email && g.invite_token), [rows]);
+  const dietaryNotes = useMemo(() => rows.filter((g) => g.rsvp === "yes" && g.dietary && g.dietary.trim()).map((g) => ({ name: g.name, dietary: g.dietary!.trim() })), [rows]);
+  const daysLeft = deadline ? Math.ceil((new Date(deadline + "T00:00:00").getTime() - Date.now()) / 86400000) : null;
+
+  const flash = (tone: "good" | "bad" | "muted", text: string) => setNote({ tone, text });
+
+  const saveDeadline = (v: string) => { setDeadline(v); actions.setRsvpDeadline(weddingId, v || null).then((r) => { if (!r.ok) setErr(r.error); }); };
+
+  const remind = () => start(async () => {
+    setNote(null);
+    const recipients = pendingWithEmail.map((g) => ({ name: g.name, email: g.email!, url: `${location.origin}/i/${g.invite_token}` }));
+    if (!recipients.length) { flash("muted", "No one to remind — every invited guest with an email has replied."); return; }
+    const r = await sendReminders(coupleName, deadline || null, recipients);
+    if (!r.ok) flash(r.notConfigured ? "muted" : "bad", r.error);
+    else flash(r.failed ? "bad" : "good", `Reminder sent to ${r.sent} guest${r.sent === 1 ? "" : "s"}${r.failed ? ` · ${r.failed} failed (${r.reason})` : ""}.`);
+  });
+
+  const exportResponses = () => {
+    const nameById = new Map(rows.map((g) => [g.id, g.name]));
+    const esc = (s: string) => `"${(s ?? "").replace(/"/g, '""')}"`;
+    const header = ["Name", "Side", "Invited", "RSVP", "Coming", "Dietary", "Plus-one of", "Responded"];
+    const lines = rows.map((g) => [g.name, g.side ?? "", g.invited ? "yes" : "no", g.rsvp, g.rsvp === "yes" ? String(g.attending_count ?? g.max_seats) : "", g.dietary ?? "", g.parent_id ? nameById.get(g.parent_id) ?? "" : "", g.responded_at ? new Date(g.responded_at).toISOString().slice(0, 10) : ""].map(esc).join(","));
+    const csv = [header.map(esc).join(","), ...lines].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = `rsvp-responses-${coupleName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.csv`; a.click(); URL.revokeObjectURL(url);
+  };
 
   const patch = (id: string, p: Partial<Guest>) => {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
@@ -123,7 +171,7 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
   const add = () =>
     start(async () => {
       const res = await actions.addGuest(weddingId);
-      if (res.ok && res.id) setRows((rs) => [...rs, { id: res.id!, name: "New guest", invite_token: res.token ?? "", email: null, parent_id: null, address: null, side: null, max_seats: 1, invited: false, rsvp: "pending", attending_count: null, dietary: null, sort: rs.length }]);
+      if (res.ok && res.id) setRows((rs) => [...rs, { id: res.id!, name: "New guest", invite_token: res.token ?? "", email: null, parent_id: null, address: null, side: null, max_seats: 1, invited: false, rsvp: "pending", attending_count: null, dietary: null, responded_at: null, sort: rs.length }]);
       else if (!res.ok) setErr(res.error);
     });
 
@@ -153,6 +201,7 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
   return (
     <div>
       {err && <p className="mb-4 rounded-md bg-bad/10 px-3 py-2 text-sm text-bad">{err}</p>}
+      {note && <p className={`mb-4 rounded-md px-3 py-2 text-sm ${note.tone === "good" ? "bg-good/10 text-good" : note.tone === "bad" ? "bg-bad/10 text-bad" : "bg-surface-2 text-muted"}`}>{note.text}</p>}
 
       {/* Summary + budget nudge */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -171,6 +220,27 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
           )}
         </div>
       </div>
+
+      {/* RSVP tracker: deadline, reminders, export */}
+      <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-line bg-surface p-4">
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-muted">RSVP by</span>
+          <input type="date" value={deadline} onChange={(e) => saveDeadline(e.target.value)} className="rounded-md border border-line bg-surface px-2 py-1 text-sm" />
+        </label>
+        {daysLeft !== null && <span className={`text-xs font-medium ${daysLeft < 0 ? "text-bad" : daysLeft <= 14 ? "text-warn" : "text-muted"}`}>{daysLeft < 0 ? `${-daysLeft} days overdue` : daysLeft === 0 ? "due today" : `${daysLeft} days left`}</span>}
+        <span className="text-sm"><strong className="tabular-nums">{pendingWithEmail.length}</strong> <span className="text-muted">awaiting reply</span> <span className="text-faint">(with email)</span></span>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {dietaryNotes.length > 0 && <button onClick={() => setShowDiet((v) => !v)} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:border-accent">🍽 Dietary ({dietaryNotes.length})</button>}
+          <button onClick={exportResponses} className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium hover:border-accent">Export responses</button>
+          <button onClick={remind} disabled={pending || pendingWithEmail.length === 0} className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50" title={pendingWithEmail.length === 0 ? "No awaiting guests have an email on file" : ""}>Send reminders</button>
+        </div>
+      </div>
+      {showDiet && dietaryNotes.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-line bg-surface-2/40 p-4">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-faint">Dietary notes — attending guests</p>
+          <ul className="space-y-1 text-sm">{dietaryNotes.map((d, i) => (<li key={i}><span className="font-medium">{d.name}:</span> <span className="text-muted">{d.dietary}</span></li>))}</ul>
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -196,9 +266,21 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
         </div>
       )}
 
+      {/* Filter tabs */}
+      {rows.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1 text-sm">
+          {FILTERS.map((f) => {
+            const n = rows.filter((g) => !g.parent_id && (f.key === "all" ? true : f.key === "pending" ? g.invited && g.rsvp === "pending" : g.rsvp === f.key)).length;
+            return <button key={f.key} onClick={() => setFilter(f.key)} className={`rounded-full px-3 py-1 ${filter === f.key ? "bg-accent-weak font-semibold text-accent" : "text-muted hover:bg-surface-2"}`}>{f.label} <span className="text-faint tabular-nums">{n}</span></button>;
+          })}
+        </div>
+      )}
+
       {/* Table */}
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-faint">No guests yet. Add someone or import a CSV.</p>
+      ) : ordered.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-line p-8 text-center text-sm text-faint">No guests in this view.</p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-line">
           <table className="w-full min-w-[900px] text-sm">
@@ -254,6 +336,7 @@ export function GuestsClient({ weddingId, guests, guestEstimate, sides }: { wedd
                         <option value="yes">Yes</option>
                         <option value="no">No</option>
                       </select>
+                      {g.responded_at && <span className="mt-0.5 block text-[10px] text-faint">replied {relDays(g.responded_at)}</span>}
                     </td>
                     <td className="px-3 py-1.5 align-top">
                       {g.rsvp === "yes" ? <NumCell value={g.attending_count ?? g.max_seats} min={0} onSet={(n) => patch(g.id, { attending_count: n })} /> : <span className="text-faint">—</span>}
