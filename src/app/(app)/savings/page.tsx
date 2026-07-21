@@ -4,7 +4,9 @@ import { loadPlanContext } from "@/lib/budget-data";
 import { resolveDue, type DueRule } from "@/lib/payments";
 import { partnerNames } from "@/lib/couple";
 import type { FinanceLine } from "@/lib/finance";
+import { plaidConfigured } from "@/lib/plaid";
 import { SavingsClient } from "./SavingsClient";
+import { BankConnection, type BankStatus } from "./BankConnection";
 
 export default async function SavingsPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { wedding_id } = await requireModule("savings");
@@ -12,14 +14,20 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
   const supabase = await createClient();
   const ctx = await loadPlanContext(supabase, wedding_id, scenario);
 
-  const [wRes, cRes, gRes, pRes, fRes, scensRes] = await Promise.all([
+  const bankOn = plaidConfigured();
+  const [wRes, cRes, gRes, pRes, fRes, scensRes, bankRes] = await Promise.all([
     supabase.from("weddings").select("name, event_date").eq("id", wedding_id).single(),
     supabase.from("budget_config").select("saved").eq("wedding_id", wedding_id).single(),
     supabase.from("gifts").select("id, label, amount, on_date, sort").eq("wedding_id", wedding_id).order("sort"),
     ctx ? supabase.from("payments").select("amount, due_date, due_rule, paid").eq("scenario_id", ctx.scenarioId) : Promise.resolve({ data: [] }),
     supabase.from("finance_lines").select("id, kind, label, amount, frequency, person, category, sort").eq("wedding_id", wedding_id).order("sort"),
     supabase.from("scenarios").select("id, name, is_active").eq("wedding_id", wedding_id).order("sort").order("created_at"),
+    bankOn ? supabase.from("plaid_items").select("institution_name, last_balance, last_synced_at").eq("wedding_id", wedding_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  const bankRow = bankRes.data as { institution_name: string | null; last_balance: number | null; last_synced_at: string | null } | null;
+  const bank: BankStatus = bankRow
+    ? { linked: true, institution: bankRow.institution_name, lastBalance: Number(bankRow.last_balance ?? 0), lastSyncedAt: bankRow.last_synced_at }
+    : { linked: false };
   const eventDate = wRes.data?.event_date ?? null;
   if (!eventDate) return null;
 
@@ -40,6 +48,7 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
         <h1 className="mt-1 font-display text-2xl font-semibold">Budget & savings</h1>
         <p className="text-sm text-muted">Your household budget → what you can set aside each month, projected against <span className="font-medium text-ink">{ctx?.name ?? "your plan"}</span>’s payments.</p>
       </header>
+      {bankOn && <BankConnection status={bank} />}
       <SavingsClient
         weddingId={wedding_id}
         eventIso={eventDate}
