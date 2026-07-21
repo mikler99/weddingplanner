@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/crypto";
 import { sumMonthly, type Frequency } from "@/lib/finance";
+import { resolveDue, type DueRule } from "@/lib/payments";
+import { forecastCashflow, type Forecast, type RecurringFlow } from "@/lib/forecast";
 import * as plaid from "@/lib/plaid";
 
 type Result = { ok: true } | { ok: false; error: string };
@@ -107,6 +109,51 @@ export async function getRecurringSuggestions(): Promise<{ ok: boolean; pending?
     if ((e as { code?: string }).code === "PRODUCT_NOT_READY") return { ok: true, pending: true, suggestions: [] };
     return { ok: false, error: msg(e) };
   }
+}
+
+// The live cash-flow forecast: real balance + recurring predicted dates +
+// this plan's unpaid wedding payments → what's actually safe to spend, and when
+// the balance dips. Read-only, so any member with the module may view it.
+export async function getForecast(scenarioId: string, eventIso: string, horizonDays = 60): Promise<{ ok: boolean; forecast?: Forecast; error?: string; pending?: boolean; hasRecurring?: boolean }> {
+  const { weddingId } = await gate();
+  try {
+    const token = await loadToken(weddingId);
+    if (!token) return { ok: false, error: "No bank linked." };
+
+    const [balRes, recRes] = await Promise.allSettled([plaid.getBalances(token), plaid.getRecurring(token)]);
+    if (balRes.status === "rejected") return { ok: false, error: msg(balRes.reason) };
+    const balance = balRes.value.accounts.filter((a) => a.type === "depository").reduce((s, a) => s + (a.balances.current ?? 0), 0);
+
+    let recurring: RecurringFlow[] = [];
+    let pending = false;
+    if (recRes.status === "fulfilled") {
+      const stream = (s: plaid.PlaidStream, kind: "income" | "bill"): RecurringFlow | null => {
+        const amount = Math.abs(s.average_amount.amount ?? s.last_amount.amount ?? 0);
+        const nextDate = s.predicted_next_date ?? s.last_date;
+        if (!amount || !nextDate) return null;
+        return { label: (s.merchant_name || s.description || (kind === "income" ? "Income" : "Bill")).slice(0, 60), amount, nextDate, frequency: PLAID_FREQ[s.frequency] ?? "monthly", kind };
+      };
+      recurring = [
+        ...recRes.value.inflow_streams.filter((s) => s.is_active).map((s) => stream(s, "income")),
+        ...recRes.value.outflow_streams.filter((s) => s.is_active).map((s) => stream(s, "bill")),
+      ].filter((r): r is RecurringFlow => r !== null);
+    } else if ((recRes.reason as { code?: string })?.code === "PRODUCT_NOT_READY") {
+      pending = true; // balance still forecasts; bills fill in once Plaid is ready
+    } else {
+      return { ok: false, error: msg(recRes.reason) };
+    }
+
+    // Unpaid wedding payments for the viewed plan, resolved to real dates.
+    const supabase = await createClient();
+    const { data: pays } = await supabase.from("payments").select("label, amount, due_date, due_rule, paid").eq("scenario_id", scenarioId);
+    const weddingPayments = (pays ?? [])
+      .filter((p) => !p.paid)
+      .map((p) => { const date = resolveDue((p.due_rule as DueRule | null) ?? null, p.due_date, eventIso).date; return date ? { label: p.label || "Wedding payment", amount: Number(p.amount), date } : null; })
+      .filter((p): p is { label: string; amount: number; date: string } => p !== null);
+
+    const forecast = forecastCashflow({ balance: Math.round(balance * 100) / 100, today: new Date().toISOString().slice(0, 10), horizonDays, recurring, weddingPayments });
+    return { ok: true, forecast, pending, hasRecurring: recurring.length > 0 };
+  } catch (e) { return { ok: false, error: msg(e) }; }
 }
 
 export async function acceptSuggestion(s: Suggestion): Promise<Result> {

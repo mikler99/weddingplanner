@@ -59,6 +59,8 @@ export type PlaidStream = {
   last_amount: { amount: number | null };
   frequency: string; // WEEKLY | BIWEEKLY | SEMI_MONTHLY | MONTHLY | ANNUALLY | UNKNOWN
   is_active: boolean;
+  predicted_next_date: string | null; // YYYY-MM-DD — when Plaid expects the next occurrence
+  last_date: string | null;
   personal_finance_category?: { primary: string | null } | null;
 };
 export function getRecurring(access_token: string) {

@@ -7,6 +7,7 @@ import type { FinanceLine } from "@/lib/finance";
 import { plaidConfigured } from "@/lib/plaid";
 import { SavingsClient } from "./SavingsClient";
 import { BankConnection, type BankStatus } from "./BankConnection";
+import { CashflowCockpit } from "./CashflowCockpit";
 
 export default async function SavingsPage({ searchParams }: { searchParams: Promise<{ scenario?: string }> }) {
   const { wedding_id } = await requireModule("savings");
@@ -49,6 +50,7 @@ export default async function SavingsPage({ searchParams }: { searchParams: Prom
         <p className="text-sm text-muted">Your household budget → what you can set aside each month, projected against <span className="font-medium text-ink">{ctx?.name ?? "your plan"}</span>’s payments.</p>
       </header>
       {bankOn && <BankConnection status={bank} />}
+      {bankOn && bank.linked && <CashflowCockpit scenarioId={ctx?.scenarioId ?? ""} eventIso={eventDate} />}
       <SavingsClient
         weddingId={wedding_id}
         eventIso={eventDate}
